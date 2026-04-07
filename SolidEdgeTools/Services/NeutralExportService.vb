@@ -3,18 +3,15 @@ Imports System.Windows.Forms
 
 Public Class NeutralExportService
 
-    Private ReadOnly _materialMatcher As Func(Of String, Boolean)
     Private ReadOnly _partExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _sheetMetalExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult)
     Private ReadOnly _occurrenceWalker As New OccurrenceWalker()
 
-    Public Sub New(materialMatcher As Func(Of String, Boolean),
-                   partExporter As Action(Of SolidEdgeFramework.Application, String, String),
+    Public Sub New(partExporter As Action(Of SolidEdgeFramework.Application, String, String),
                    sheetMetalExporter As Action(Of SolidEdgeFramework.Application, String, String),
                    errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult))
 
-        _materialMatcher = materialMatcher
         _partExporter = partExporter
         _sheetMetalExporter = sheetMetalExporter
         _errorHandler = errorHandler
@@ -22,8 +19,7 @@ Public Class NeutralExportService
 
     Public Function ExportAssembly(seApplication As SolidEdgeFramework.Application,
                                    assembly As SolidEdgeAssembly.AssemblyDocument,
-                                   prefix As String,
-                                   exportType As String) As Boolean
+                                   options As NeutralExportOptions) As Boolean
 
         Dim occurrenceFileNames As New Dictionary(Of String, Integer)
 
@@ -35,16 +31,16 @@ Public Class NeutralExportService
                     Return True
                 End If
 
-                If Not _materialMatcher(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
+                If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
                     Return True
                 End If
 
                 If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, exportType, item.OccurrenceFileName, _partExporter)
+                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName, _partExporter)
                 End If
 
                 If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, exportType, item.OccurrenceFileName, _sheetMetalExporter)
+                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName, _sheetMetalExporter)
                 End If
 
                 Return True
@@ -54,8 +50,7 @@ Public Class NeutralExportService
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
                                 occurrenceFileNames As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
-                                prefix As String,
-                                exportType As String,
+                                options As NeutralExportOptions,
                                 occurrenceFileName As String,
                                 exporter As Action(Of SolidEdgeFramework.Application, String, String)) As Boolean
 
@@ -68,8 +63,8 @@ Public Class NeutralExportService
                 exporter(seApplication,
                          occurrenceFileName,
                          Path.Combine(rootAssemblyPath,
-                                      exportType,
-                                      prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), exportType)))
+                                      options.ExportType,
+                                      options.Prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), options.ExportType)))
 
                 occurrenceFileNames.Add(occurrenceFileName, 0)
                 Return True

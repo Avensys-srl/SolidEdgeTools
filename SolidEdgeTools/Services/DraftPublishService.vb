@@ -9,7 +9,7 @@ Public Class DraftPublishService
     End Sub
 
     Public Function PublishPdf(seApplication As SolidEdgeFramework.Application,
-                               inputDFTDirectory As String) As Boolean
+                               options As DraftPublishOptions) As Boolean
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
@@ -17,7 +17,7 @@ Public Class DraftPublishService
         Try
             seDocuments = seApplication.Documents
 
-            For Each dftPath As String In Directory.GetFiles(inputDFTDirectory, "*.dft")
+            For Each dftPath As String In Directory.GetFiles(options.InputDirectory, "*.dft")
                 objDraft = seDocuments.Open(dftPath)
 
                 Dim outPDFFilePath = Path.Combine(Path.GetDirectoryName(dftPath),
@@ -40,7 +40,7 @@ Public Class DraftPublishService
     End Function
 
     Public Function PublishDwg(seApplication As SolidEdgeFramework.Application,
-                               inputDFTDirectory As String) As Boolean
+                               options As DraftPublishOptions) As Boolean
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
@@ -48,7 +48,7 @@ Public Class DraftPublishService
         Try
             seDocuments = seApplication.Documents
 
-            For Each dftPath As String In Directory.GetFiles(inputDFTDirectory, "*.dft")
+            For Each dftPath As String In Directory.GetFiles(options.InputDirectory, "*.dft")
                 objDraft = seDocuments.Open(dftPath)
 
                 Dim outDWGFilePath = Path.Combine(Path.GetDirectoryName(dftPath),

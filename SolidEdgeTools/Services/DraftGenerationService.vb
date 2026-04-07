@@ -3,23 +3,20 @@ Imports System.Windows.Forms
 
 Public Class DraftGenerationService
 
-    Private ReadOnly _materialMatcher As Func(Of String, Boolean)
     Private ReadOnly _draftExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult)
     Private ReadOnly _occurrenceWalker As New OccurrenceWalker()
 
-    Public Sub New(materialMatcher As Func(Of String, Boolean),
-                   draftExporter As Action(Of SolidEdgeFramework.Application, String, String),
+    Public Sub New(draftExporter As Action(Of SolidEdgeFramework.Application, String, String),
                    errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult))
 
-        _materialMatcher = materialMatcher
         _draftExporter = draftExporter
         _errorHandler = errorHandler
     End Sub
 
     Public Function GenerateForAssembly(seApplication As SolidEdgeFramework.Application,
                                         assembly As SolidEdgeAssembly.AssemblyDocument,
-                                        prefix As String) As Boolean
+                                        options As DraftGenerationOptions) As Boolean
 
         Dim processedFiles As New Dictionary(Of String, Integer)
 
@@ -36,18 +33,18 @@ Public Class DraftGenerationService
                     Return True
                 End If
 
-                If Not _materialMatcher(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
+                If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
                     Return True
                 End If
 
-                Return ExportFile(seApplication, processedFiles, assembly.Path, prefix, item.OccurrenceFileName)
+                Return ExportFile(seApplication, processedFiles, assembly.Path, options, item.OccurrenceFileName)
             End Function)
     End Function
 
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
                                 processedFiles As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
-                                prefix As String,
+                                options As DraftGenerationOptions,
                                 occurrenceFileName As String) As Boolean
 
         If processedFiles.ContainsKey(occurrenceFileName) Then
@@ -57,7 +54,7 @@ Public Class DraftGenerationService
         Do While True
             Try
                 _draftExporter(seApplication,
-                               BuildOutputPath(rootAssemblyPath, prefix, occurrenceFileName),
+                               BuildOutputPath(rootAssemblyPath, options.Prefix, occurrenceFileName),
                                occurrenceFileName)
 
                 processedFiles.Add(occurrenceFileName, 0)

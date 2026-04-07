@@ -126,6 +126,7 @@
   <ItemGroup>
     <Compile Include="Interop\SolidEdgeSessionHelpers.vb" />
     <Compile Include="Models\BOMItem.vb" />
+    <Compile Include="Models\WorkflowOptions.vb" />
     <Compile Include="Services\FilePropertyService.vb" />
     <Compile Include="Services\BomService.vb" />
     <Compile Include="Services\DraftGenerationService.vb" />

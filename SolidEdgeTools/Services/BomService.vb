@@ -20,8 +20,7 @@ Public Class BomService
     End Function
 
     Public Function ToSupplierArray(bomAssembly As BOMAssembly,
-                                    prefix As String,
-                                    materialMatcher As Func(Of String, Boolean)) As Array
+                                    options As BomExportOptions) As Array
 
         Dim index As Integer = 0
         Dim flatBoms As New Dictionary(Of String, BOMItem)
@@ -37,8 +36,8 @@ Public Class BomService
         index += 1
 
         For Each item As BOMItem In flatBoms.Values
-            If materialMatcher(item.Material) Then
-                values.SetValue(prefix + Path.GetFileNameWithoutExtension(item.Name), index, 0)
+            If MaterialFilter.MatchesSelectedMaterial(item.Material, options.MaterialSelection.SelectedMaterials) Then
+                values.SetValue(options.Prefix + Path.GetFileNameWithoutExtension(item.Name), index, 0)
                 values.SetValue(If(item.Thickness, ""), index, 1)
                 values.SetValue(If(item.Material, ""), index, 2)
                 values.SetValue(item.Count.ToString(), index, 3)
@@ -50,7 +49,7 @@ Public Class BomService
     End Function
 
     Public Function ToPropertyArray(bomAssembly As BOMAssembly,
-                                    materialMatcher As Func(Of String, Boolean)) As Array
+                                    options As BomExportOptions) As Array
 
         Dim index As Integer = 0
         Dim flatBoms As New Dictionary(Of String, BOMItem)
@@ -70,7 +69,7 @@ Public Class BomService
         index += 1
 
         For Each item As BOMItem In flatBoms.Values
-            If materialMatcher(item.Material) Then
+            If MaterialFilter.MatchesSelectedMaterial(item.Material, options.MaterialSelection.SelectedMaterials) Then
                 values.SetValue(Path.GetFileNameWithoutExtension(item.Name), index, 0)
                 values.SetValue(If(item.Thickness, ""), index, 1)
                 values.SetValue(If(item.Material, ""), index, 2)

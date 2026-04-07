@@ -1,25 +1,40 @@
 Imports System.Runtime.InteropServices
 
+Public Class SolidEdgeSessionContext
+    Public Property Application As SolidEdgeFramework.Application
+    Public Property StartedByTool As Boolean
+End Class
+
 Public Module SolidEdgeSessionHelpers
 
-    Public Function OpenApplication(makeVisible As Boolean) As SolidEdgeFramework.Application
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
+    Public Function OpenApplication(makeVisible As Boolean) As SolidEdgeSessionContext
+        Dim session As New SolidEdgeSessionContext()
 
         SolidEdgeCommunity.OleMessageFilter.Register()
-        seApplication = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
-        seApplication.Visible = makeVisible
+        Try
+            session.Application = DirectCast(Marshal.GetActiveObject("SolidEdge.Application"), SolidEdgeFramework.Application)
+            session.StartedByTool = False
+        Catch ex As Exception
+            session.Application = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
+            session.StartedByTool = True
+        End Try
 
-        Return seApplication
+        session.Application.Visible = makeVisible
+
+        Return session
     End Function
 
-    Public Sub CloseApplication(ByRef seApplication As SolidEdgeFramework.Application, quit As Boolean)
-        If seApplication Is Nothing Then
+    Public Sub CloseApplication(ByRef session As SolidEdgeSessionContext, quit As Boolean)
+        If session Is Nothing OrElse session.Application Is Nothing Then
             Return
         End If
 
-        If quit Then
-            seApplication.Quit()
+        If quit AndAlso session.StartedByTool Then
+            session.Application.Quit()
         End If
+
+        ReleaseCOMReference(session.Application)
+        session = Nothing
 
         SolidEdgeCommunity.OleMessageFilter.Unregister()
     End Sub

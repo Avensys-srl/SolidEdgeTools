@@ -3,30 +3,26 @@ Imports System.Windows.Forms
 
 Public Class FlatDxfExportService
 
-    Private ReadOnly _materialMatcher As Func(Of String, Boolean)
     Private ReadOnly _dxfExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult)
     Private ReadOnly _occurrenceWalker As New OccurrenceWalker()
 
-    Public Sub New(materialMatcher As Func(Of String, Boolean),
-                   dxfExporter As Action(Of SolidEdgeFramework.Application, String, String),
+    Public Sub New(dxfExporter As Action(Of SolidEdgeFramework.Application, String, String),
                    errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult))
 
-        _materialMatcher = materialMatcher
         _dxfExporter = dxfExporter
         _errorHandler = errorHandler
     End Sub
 
     Public Function ExportAssembly(seApplication As SolidEdgeFramework.Application,
                                    assembly As SolidEdgeAssembly.AssemblyDocument,
-                                   prefix As String,
-                                   includeSubAssemblies As Boolean) As Boolean
+                                   options As FlatDxfExportOptions) As Boolean
 
         Dim occurrenceFileNames As New Dictionary(Of String, Integer)
 
         Return _occurrenceWalker.Walk(
             assembly.Occurrences,
-            includeSubAssemblies,
+            options.IncludeSubAssemblies,
             Function(item)
                 If item.Type <> SolidEdgeFramework.ObjectType.igPart Then
                     Return True
@@ -36,18 +32,18 @@ Public Class FlatDxfExportService
                     Return True
                 End If
 
-                If Not _materialMatcher(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
+                If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
                     Return True
                 End If
 
-                Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, item.OccurrenceFileName)
+                Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName)
             End Function)
     End Function
 
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
                                 occurrenceFileNames As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
-                                prefix As String,
+                                options As FlatDxfExportOptions,
                                 occurrenceFileName As String) As Boolean
 
         If occurrenceFileNames.ContainsKey(occurrenceFileName) Then
@@ -60,7 +56,7 @@ Public Class FlatDxfExportService
                              occurrenceFileName,
                              Path.Combine(rootAssemblyPath,
                                           "dxf",
-                                          prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), "dxf")))
+                                          options.Prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), "dxf")))
 
                 occurrenceFileNames.Add(occurrenceFileName, 0)
                 Return True

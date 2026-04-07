@@ -9,6 +9,7 @@ Public Class SET_MainForm
 
     Private Sub btnPropTable_Click(sender As System.Object, e As System.EventArgs) Handles btnPropTable.Click
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim objApp As SolidEdgeFramework.Application = Nothing
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDocument As SolidEdgeFramework.SolidEdgeDocument = Nothing
@@ -24,12 +25,8 @@ Public Class SET_MainForm
                 If sfdSelectXLSFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
 
 
-                    ' Register with OLE to handle concurrency issues on the current thread.
-                    SolidEdgeCommunity.OleMessageFilter.Register()
-                    ' Connect to or start Solid Edge.
-                    objApp = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
-                    ' Make Solid Edge visible
-                    objApp.Visible = True 'se_off.Checked --> sembra non salvi in background
+                    session = SolidEdgeSessionHelpers.OpenApplication(True)
+                    objApp = session.Application
                     ' Turn off alerts. Weldment environment will display a warning
                     objApp.DisplayAlerts = True
                     ' Get a reference to the Documents collection
@@ -63,9 +60,6 @@ Public Class SET_MainForm
 
                     WriteSpreadsheetFromArray(xlsArray, sfdSelectXLSFile.FileName)
 
-                    objDocuments.Close()
-                    objApp.Quit()
-
                 End If
 
 
@@ -86,6 +80,8 @@ Public Class SET_MainForm
                 Marshal.ReleaseComObject(objPropSets)
                 objPropSets = Nothing
             End If
+            ReleaseCOMReference(objDocuments)
+            SE_CloseApplication(session, True)
         End Try
     End Sub
 
@@ -94,11 +90,13 @@ Public Class SET_MainForm
     End Sub
 
     Private Sub BOM_Generate(PropBom As Boolean)
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim objApp As SolidEdgeFramework.Application = Nothing
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim bomService As New BomService(AddressOf PsmGetProperty)
         Dim bomAssembly As BOMAssembly
+        Dim bomOptions = GetBomExportOptions()
         Dim xlsArray As Array
 
         Try
@@ -106,12 +104,8 @@ Public Class SET_MainForm
                 sfdSelectXLSFile.FileName = "Lista_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
                 If sfdSelectXLSFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
 
-                    ' Register with OLE to handle concurrency issues on the current thread.
-                    SolidEdgeCommunity.OleMessageFilter.Register()
-                    ' Connect to or start Solid Edge.
-                    objApp = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
-                    ' Make Solid Edge visible
-                    objApp.Visible = True 'se_off.Checked --> sembra non salvi in background
+                    session = SolidEdgeSessionHelpers.OpenApplication(True)
+                    objApp = session.Application
                     ' Turn off alerts. Weldment environment will display a warning
                     objApp.DisplayAlerts = False
                     ' Get a reference to the Documents collection
@@ -122,21 +116,22 @@ Public Class SET_MainForm
                     bomAssembly = bomService.Build(objAssembly.FullName, objAssembly.Occurrences)
 
                     If PropBom Then
-                        xlsArray = bomService.ToPropertyArray(bomAssembly, AddressOf CheckMaterial)
+                        xlsArray = bomService.ToPropertyArray(bomAssembly, bomOptions)
                     Else
-                        xlsArray = bomService.ToSupplierArray(bomAssembly, Prefisso.Text, AddressOf CheckMaterial)
+                        xlsArray = bomService.ToSupplierArray(bomAssembly, bomOptions)
                     End If
 
                     WriteSpreadsheetFromArray(xlsArray, sfdSelectXLSFile.FileName)
-
-                    objDocuments.Close()
-                    objApp.Quit()
 
                 End If
             End If
 
         Catch exception As Exception
             DisplayException(exception)
+        Finally
+            ReleaseCOMReference(objAssembly)
+            ReleaseCOMReference(objDocuments)
+            SE_CloseApplication(session, True)
         End Try
 
     End Sub
@@ -200,13 +195,7 @@ Public Class SET_MainForm
     End Sub
 
     Public Function CheckMaterial(item_material As String) As Boolean
-        Dim selectedMaterials As New List(Of String)
-
-        For Each item In Material.CheckedItems
-            selectedMaterials.Add(item.ToString())
-        Next
-
-        Return MaterialFilter.MatchesSelectedMaterial(item_material, selectedMaterials)
+        Return MaterialFilter.MatchesSelectedMaterial(item_material, GetMaterialSelectionOptions().SelectedMaterials)
 
     End Function
     Sub GetFileProps(filename As String, i As Integer)
@@ -325,13 +314,13 @@ Public Class SET_MainForm
 
 #Region "====[ Solid Edge Functions ]===="
 
-    Private Function SE_OpenApplication(makeVisible As Boolean) As SolidEdgeFramework.Application
-        Return SolidEdgeSessionHelpers.OpenApplication(makeVisible)
+    Private Function SE_OpenApplication(options As SolidEdgeApplicationOptions) As SolidEdgeSessionContext
+        Return SolidEdgeSessionHelpers.OpenApplication(options.MakeVisible)
 
     End Function
 
-    Private Sub SE_CloseApplication(ByRef seApplication As SolidEdgeFramework.Application, quit As Boolean)
-        SolidEdgeSessionHelpers.CloseApplication(seApplication, quit)
+    Private Sub SE_CloseApplication(ByRef session As SolidEdgeSessionContext, quit As Boolean)
+        SolidEdgeSessionHelpers.CloseApplication(session, quit)
     End Sub
 
     Private Sub ReleaseCOMReference(ByRef comObject As Object)
@@ -582,15 +571,17 @@ Public Class SET_MainForm
 
     Public Function GenerateDisegniDiPiega_Execute(asmFilePath As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim draftService As New DraftGenerationService(AddressOf CheckMaterial,
-                                                       AddressOf DisegniDiPiega_ExportDFT,
+        Dim draftOptions = GetDraftGenerationOptions()
+        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
                                                        AddressOf DisplayException)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
             seDocuments = seApplication.Documents
@@ -598,14 +589,14 @@ Public Class SET_MainForm
             ' Load file asm
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If draftService.GenerateForAssembly(seApplication, seAssembly, Prefisso.Text) = False Then
+            If draftService.GenerateForAssembly(seApplication, seAssembly, draftOptions) = False Then
                 Return False
             End If
 
         Finally
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -614,7 +605,8 @@ Public Class SET_MainForm
 
     Public Sub DisegniDiPiega_ExportDFT(ByVal seApplication As SolidEdgeFramework.Application,
                         outputDFTFilePath As String,
-                        modelLinkPath As String)
+                        modelLinkPath As String,
+                        scale As Double)
 
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
@@ -648,7 +640,7 @@ Public Class SET_MainForm
                 objDrawingView = objDrawingViews.AddSheetMetalView(
                 objModelLink,
                 SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-                CDbl(txtScale.Text),
+                scale,
                 0.1,
                 0.3,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
@@ -671,7 +663,7 @@ Public Class SET_MainForm
                 objDrawingView = objDrawingViews.AddPartView(
                 objModelLink,
                 SolidEdgeDraft.ViewOrientationConstants.igBottomFrontRightView,
-                CDbl(txtScale.Text),
+                scale,
                 0.12,
                 0.3,
                 SolidEdgeDraft.PartDrawingViewTypeConstants.sePartDesignedView)
@@ -759,7 +751,8 @@ Public Class SET_MainForm
 
     Public Sub DisegniDiPiega_ExportJPG(ByVal seApplication As SolidEdgeFramework.Application,
                         outputDFTFilePath As String,
-                        modelLinkPath As String)
+                        modelLinkPath As String,
+                        scale As Double)
 
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
@@ -794,7 +787,7 @@ Public Class SET_MainForm
             objDrawingView = objDrawingViews.AddSheetMetalView(
                 objModelLink,
                 SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-                CDbl(txtScale.Text),
+                scale,
                 0.12,
                 0.3,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
@@ -883,16 +876,18 @@ Public Class SET_MainForm
 
     Public Function Export_Execute(asmFilePath As String, type As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim exportService As New NeutralExportService(AddressOf CheckMaterial,
-                                                      AddressOf ExportPartDocument,
+        Dim exportOptions = GetNeutralExportOptions(type)
+        Dim exportService As New NeutralExportService(AddressOf ExportPartDocument,
                                                       AddressOf ExportSheetMetalDocumentDocument,
                                                       AddressOf DisplayException)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
             seDocuments = seApplication.Documents
@@ -900,12 +895,12 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, type) = False Then
+            If exportService.ExportAssembly(seApplication, seAssembly, exportOptions) = False Then
                 Return False
             End If
 
         Finally
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
         End Try
@@ -945,15 +940,17 @@ Public Class SET_MainForm
 
     Public Function ExportDXF_Execute(asmFilePath As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim exportService As New FlatDxfExportService(AddressOf CheckMaterial,
-                                                      AddressOf ExportSheetMetalDocumentToDxf,
+        Dim exportOptions = GetFlatDxfExportOptions()
+        Dim exportService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
                                                       AddressOf DisplayException)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
             seDocuments = seApplication.Documents
@@ -961,12 +958,12 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If Not exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, all_subasm.Checked) Then
+            If Not exportService.ExportAssembly(seApplication, seAssembly, exportOptions) Then
                 Return False
             End If
 
         Finally
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
         End Try
@@ -1007,17 +1004,20 @@ Public Class SET_MainForm
 
     Public Function ConvertDisegniDiPiegaToPdf_Execute(inputDFTDirectory As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim publishService As New DraftPublishService()
+        Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
-            publishService.PublishPdf(seApplication, inputDFTDirectory)
+            publishService.PublishPdf(seApplication, publishOptions)
 
         Finally
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -1026,17 +1026,20 @@ Public Class SET_MainForm
 
     Public Function ConvertDisegniDiPiegaToDWG_Execute(inputDFTDirectory As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim publishService As New DraftPublishService()
+        Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
-            publishService.PublishDwg(seApplication, inputDFTDirectory)
+            publishService.PublishDwg(seApplication, publishOptions)
 
         Finally
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -1105,15 +1108,18 @@ Public Class SET_MainForm
 
     Public Function ExportJPG_Execute(asmFilePath As String) As Boolean
 
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim exportService As New ImageExportService(AddressOf CheckMaterial,
-                                                    AddressOf ExportPartDocumentImage,
+        Dim exportOptions = GetImageExportOptions()
+        Dim draftOptions = GetDraftGenerationOptions()
+        Dim exportService As New ImageExportService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportJPG(app, outputPath, modelLinkPath, draftOptions.Scale),
                                                     AddressOf DisplayException)
 
         Try
-            seApplication = SE_OpenApplication(se_off.CheckState)
+            session = SE_OpenApplication(GetApplicationOptions())
+            seApplication = session.Application
 
             seApplication.DisplayAlerts = False
             seDocuments = seApplication.Documents
@@ -1121,12 +1127,12 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If Not exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, all_subasm.Checked) Then
+            If Not exportService.ExportAssembly(seApplication, seAssembly, exportOptions) Then
                 Return False
             End If
 
         Finally
-            SE_CloseApplication(seApplication, True)
+            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
         End Try
@@ -1135,10 +1141,12 @@ Public Class SET_MainForm
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click
+        Dim session As SolidEdgeSessionContext = Nothing
         Dim objApp As SolidEdgeFramework.Application = Nothing
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim xlsArray(100, 3) As String
         Dim index As Integer = 0
+        Dim projectCodingOptions = GetProjectCodingOptions()
         Dim objPropSets As SolidEdgeFileProperties.PropertySets = New SolidEdgeFileProperties.PropertySets
         Dim objProp As SolidEdgeFileProperties.Property = Nothing
         Dim objProps As SolidEdgeFileProperties.Properties = Nothing
@@ -1148,12 +1156,8 @@ Public Class SET_MainForm
             If ofdSelectPSMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
 
 
-                ' Register with OLE to handle concurrency issues on the current thread.
-                SolidEdgeCommunity.OleMessageFilter.Register()
-                ' Connect to or start Solid Edge.
-                objApp = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
-                ' Make Solid Edge visible
-                objApp.Visible = True 'se_off.Checked --> sembra non salvi in background
+                session = SolidEdgeSessionHelpers.OpenApplication(True)
+                objApp = session.Application
                 ' Turn off alerts. Weldment environment will display a warning
                 objApp.DisplayAlerts = True
                 ' Get a reference to the Documents collection
@@ -1167,14 +1171,13 @@ Public Class SET_MainForm
 
                 objProps = objPropSets.Item("ProjectInformation")
 
-                objProps.Item("Project Name").Value = txtProgetto.Text
-                objProps.Item("Revision").Value = txtVersione.Text
-                objProps.Item("Document Number").Value = txtProgressivo.Text
+                objProps.Item("Project Name").Value = projectCodingOptions.ProjectName
+                objProps.Item("Revision").Value = projectCodingOptions.Revision
+                objProps.Item("Document Number").Value = projectCodingOptions.DocumentNumber
 
                 objProps.Save()
                 objPropSets.Save()
                 objPropSets.Close()
-                objApp.Quit()
 
             End If
 
@@ -1194,6 +1197,8 @@ Public Class SET_MainForm
                 Marshal.ReleaseComObject(objPropSets)
                 objPropSets = Nothing
             End If
+            ReleaseCOMReference(objDocuments)
+            SE_CloseApplication(session, True)
         End Try
     End Sub
 
@@ -1216,6 +1221,75 @@ Public Class SET_MainForm
             DisplayException(exception)
         End Try
     End Sub
+
+    Private Function GetApplicationOptions() As SolidEdgeApplicationOptions
+        Return New SolidEdgeApplicationOptions() With {
+            .MakeVisible = se_off.CheckState
+        }
+    End Function
+
+    Private Function GetMaterialSelectionOptions() As MaterialSelectionOptions
+        Dim options As New MaterialSelectionOptions()
+
+        For Each item In Material.CheckedItems
+            options.SelectedMaterials.Add(item.ToString())
+        Next
+
+        Return options
+    End Function
+
+    Private Function GetBomExportOptions() As BomExportOptions
+        Return New BomExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .MaterialSelection = GetMaterialSelectionOptions()
+        }
+    End Function
+
+    Private Function GetNeutralExportOptions(exportType As String) As NeutralExportOptions
+        Return New NeutralExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .ExportType = exportType,
+            .MaterialSelection = GetMaterialSelectionOptions()
+        }
+    End Function
+
+    Private Function GetFlatDxfExportOptions() As FlatDxfExportOptions
+        Return New FlatDxfExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .IncludeSubAssemblies = all_subasm.Checked,
+            .MaterialSelection = GetMaterialSelectionOptions()
+        }
+    End Function
+
+    Private Function GetImageExportOptions() As ImageExportOptions
+        Return New ImageExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .IncludeSubAssemblies = all_subasm.Checked,
+            .MaterialSelection = GetMaterialSelectionOptions()
+        }
+    End Function
+
+    Private Function GetDraftGenerationOptions() As DraftGenerationOptions
+        Return New DraftGenerationOptions() With {
+            .Prefix = Prefisso.Text,
+            .Scale = CDbl(txtScale.Text),
+            .MaterialSelection = GetMaterialSelectionOptions()
+        }
+    End Function
+
+    Private Function GetDraftPublishOptions(inputDirectory As String) As DraftPublishOptions
+        Return New DraftPublishOptions() With {
+            .InputDirectory = inputDirectory
+        }
+    End Function
+
+    Private Function GetProjectCodingOptions() As ProjectCodingOptions
+        Return New ProjectCodingOptions() With {
+            .ProjectName = txtProgetto.Text,
+            .Revision = txtVersione.Text,
+            .DocumentNumber = txtProgressivo.Text
+        }
+    End Function
 
 
 
