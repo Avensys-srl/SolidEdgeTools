@@ -1,37 +1,38 @@
 Imports System.IO
 Imports System.Windows.Forms
 
-Public Class NeutralExportService
+Public Class ImageExportService
 
     Private ReadOnly _materialMatcher As Func(Of String, Boolean)
-    Private ReadOnly _partExporter As Action(Of SolidEdgeFramework.Application, String, String)
-    Private ReadOnly _sheetMetalExporter As Action(Of SolidEdgeFramework.Application, String, String)
+    Private ReadOnly _imageExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult)
     Private ReadOnly _occurrenceWalker As New OccurrenceWalker()
 
     Public Sub New(materialMatcher As Func(Of String, Boolean),
-                   partExporter As Action(Of SolidEdgeFramework.Application, String, String),
-                   sheetMetalExporter As Action(Of SolidEdgeFramework.Application, String, String),
+                   imageExporter As Action(Of SolidEdgeFramework.Application, String, String),
                    errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult))
 
         _materialMatcher = materialMatcher
-        _partExporter = partExporter
-        _sheetMetalExporter = sheetMetalExporter
+        _imageExporter = imageExporter
         _errorHandler = errorHandler
     End Sub
 
     Public Function ExportAssembly(seApplication As SolidEdgeFramework.Application,
                                    assembly As SolidEdgeAssembly.AssemblyDocument,
                                    prefix As String,
-                                   exportType As String) As Boolean
+                                   includeSubAssemblies As Boolean) As Boolean
 
         Dim occurrenceFileNames As New Dictionary(Of String, Integer)
 
         Return _occurrenceWalker.Walk(
             assembly.Occurrences,
-            True,
+            includeSubAssemblies,
             Function(item)
                 If item.Type <> SolidEdgeFramework.ObjectType.igPart Then
+                    Return True
+                End If
+
+                If Path.GetExtension(item.OccurrenceFileName) <> ".par" Then
                     Return True
                 End If
 
@@ -39,15 +40,7 @@ Public Class NeutralExportService
                     Return True
                 End If
 
-                If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, exportType, item.OccurrenceFileName, _partExporter)
-                End If
-
-                If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, exportType, item.OccurrenceFileName, _sheetMetalExporter)
-                End If
-
-                Return True
+                Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, item.OccurrenceFileName)
             End Function)
     End Function
 
@@ -55,9 +48,7 @@ Public Class NeutralExportService
                                 occurrenceFileNames As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
                                 prefix As String,
-                                exportType As String,
-                                occurrenceFileName As String,
-                                exporter As Action(Of SolidEdgeFramework.Application, String, String)) As Boolean
+                                occurrenceFileName As String) As Boolean
 
         If occurrenceFileNames.ContainsKey(occurrenceFileName) Then
             Return True
@@ -65,11 +56,11 @@ Public Class NeutralExportService
 
         Do While True
             Try
-                exporter(seApplication,
-                         occurrenceFileName,
-                         Path.Combine(rootAssemblyPath,
-                                      exportType,
-                                      prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), exportType)))
+                _imageExporter(seApplication,
+                               occurrenceFileName,
+                               Path.Combine(rootAssemblyPath,
+                                            "image",
+                                            prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), "jpg")))
 
                 occurrenceFileNames.Add(occurrenceFileName, 0)
                 Return True

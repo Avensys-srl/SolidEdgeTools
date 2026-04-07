@@ -6,6 +6,7 @@ Public Class FlatDxfExportService
     Private ReadOnly _materialMatcher As Func(Of String, Boolean)
     Private ReadOnly _dxfExporter As Action(Of SolidEdgeFramework.Application, String, String)
     Private ReadOnly _errorHandler As Func(Of Exception, String, MessageBoxButtons, MessageBoxIcon, DialogResult)
+    Private ReadOnly _occurrenceWalker As New OccurrenceWalker()
 
     Public Sub New(materialMatcher As Func(Of String, Boolean),
                    dxfExporter As Action(Of SolidEdgeFramework.Application, String, String),
@@ -23,57 +24,57 @@ Public Class FlatDxfExportService
 
         Dim occurrenceFileNames As New Dictionary(Of String, Integer)
 
-        Return ScanNode(seApplication, occurrenceFileNames, assembly, assembly.Occurrences, prefix, includeSubAssemblies)
+        Return _occurrenceWalker.Walk(
+            assembly.Occurrences,
+            includeSubAssemblies,
+            Function(item)
+                If item.Type <> SolidEdgeFramework.ObjectType.igPart Then
+                    Return True
+                End If
+
+                If Path.GetExtension(item.OccurrenceFileName) <> ".psm" Then
+                    Return True
+                End If
+
+                If Not _materialMatcher(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
+                    Return True
+                End If
+
+                Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, prefix, item.OccurrenceFileName)
+            End Function)
     End Function
 
-    Private Function ScanNode(seApplication As SolidEdgeFramework.Application,
-                              occurrenceFileNames As Dictionary(Of String, Integer),
-                              rootAssembly As SolidEdgeAssembly.AssemblyDocument,
-                              occurrences As SolidEdgeAssembly.Occurrences,
-                              prefix As String,
-                              includeSubAssemblies As Boolean) As Boolean
+    Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
+                                occurrenceFileNames As Dictionary(Of String, Integer),
+                                rootAssemblyPath As String,
+                                prefix As String,
+                                occurrenceFileName As String) As Boolean
 
-        For Each item As SolidEdgeAssembly.Occurrence In occurrences
-            Select Case item.Type
-                Case SolidEdgeFramework.ObjectType.igSubAssembly
-                    If includeSubAssemblies Then
-                        If Not ScanNode(seApplication, occurrenceFileNames, rootAssembly, item.OccurrenceDocument.Occurrences, prefix, includeSubAssemblies) Then
-                            Return False
-                        End If
-                    End If
+        If occurrenceFileNames.ContainsKey(occurrenceFileName) Then
+            Return True
+        End If
 
-                Case SolidEdgeFramework.ObjectType.igPart
-                    If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-                        If _materialMatcher(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-                            If Not occurrenceFileNames.ContainsKey(item.OccurrenceFileName) Then
-                                Do While True
-                                    Try
-                                        _dxfExporter(seApplication,
-                                                     item.OccurrenceFileName,
-                                                     Path.Combine(rootAssembly.Path,
-                                                                  "dxf",
-                                                                  prefix & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), "dxf")))
+        Do While True
+            Try
+                _dxfExporter(seApplication,
+                             occurrenceFileName,
+                             Path.Combine(rootAssemblyPath,
+                                          "dxf",
+                                          prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), "dxf")))
 
-                                        occurrenceFileNames.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-                                    Catch ex As Exception
-                                        Select Case _errorHandler(ex,
-                                                                  String.Format("Errore durante l'esportazione {0}.", item.OccurrenceFileName),
-                                                                  MessageBoxButtons.AbortRetryIgnore,
-                                                                  MessageBoxIcon.Error)
-                                            Case DialogResult.Ignore
-                                                Exit Do
-                                            Case DialogResult.Abort
-                                                Return False
-                                        End Select
-                                    End Try
-                                Loop
-                            End If
-                        End If
-                    End If
-            End Select
-        Next
-
-        Return True
+                occurrenceFileNames.Add(occurrenceFileName, 0)
+                Return True
+            Catch ex As Exception
+                Select Case _errorHandler(ex,
+                                          String.Format("Errore durante l'esportazione {0}.", occurrenceFileName),
+                                          MessageBoxButtons.AbortRetryIgnore,
+                                          MessageBoxIcon.Error)
+                    Case DialogResult.Ignore
+                        Return True
+                    Case DialogResult.Abort
+                        Return False
+                End Select
+            End Try
+        Loop
     End Function
 End Class

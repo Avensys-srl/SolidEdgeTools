@@ -1,4 +1,4 @@
-# Solid Edge V20 Automation Tool – Handoff Document
+# Solid Edge V20 Automation Tool - Handoff Document
 
 ## 1. Objective
 
@@ -18,7 +18,7 @@ Design and evolve an existing **VB.NET Solid Edge automation tool** into a **mod
 - COM-based API (Automation)
 
 ### Programming Stack
-- VB.NET (.NET Framework 2.0–4.x compatible)
+- VB.NET (.NET Framework 2.0-4.x compatible)
 - COM Interop
 
 ### API Access Pattern
@@ -36,11 +36,11 @@ app = Marshal.GetActiveObject("SolidEdge.Application")
 
 ```text
 Application
- └── Documents
-      ├── PartDocument
-      ├── SheetMetalDocument
-      ├── AssemblyDocument
-      └── DraftDocument
+  `-- Documents
+       |-- PartDocument
+       |-- SheetMetalDocument
+       |-- AssemblyDocument
+       `-- DraftDocument
 ```
 
 ---
@@ -86,7 +86,42 @@ Current VB.NET tool already handles:
 - DXF generation
 - File handling / naming
 
-👉 Current nature: **post-processing tool**
+Current nature: **post-processing tool**
+
+---
+
+## 4.1 Current Repository Status (Updated)
+
+The repository is no longer only a single-form utility.
+
+The original WinForms application still exists, but the ongoing refactoring has already extracted a first service layer around the legacy codebase.
+
+Current extracted modules in the repository:
+
+- `Interop/SolidEdgeSessionHelpers.vb`
+- `Models/BOMItem.vb`
+- `Services/FilePropertyService.vb`
+- `Services/MaterialFilter.vb`
+- `Services/BomService.vb`
+- `Services/NeutralExportService.vb`
+- `Services/FlatDxfExportService.vb`
+- `Services/DraftGenerationService.vb`
+- `Services/DraftPublishService.vb`
+- `Services/ImageExportService.vb`
+- `Services/OccurrenceWalker.vb`
+
+Current practical state:
+
+- UI still starts from `SET_MainForm`
+- major export and BOM workflows are already delegated to services
+- recursive assembly traversal has been centralized for most workflows
+- geometry-generation capability is still not implemented
+- direct control reads from the form are still present and should be replaced later with request/config objects
+
+This means the codebase is now in an **incremental transition state**:
+
+- not yet a CAD automation engine
+- no longer just a monolithic form-based utility
 
 ---
 
@@ -104,13 +139,17 @@ Transform into a:
 
 ```text
 [UI / Input]
-     ↓
+     |
+     v
 [Configuration Engine]
-     ↓
+     |
+     v
 [Geometry Engine]
-     ↓
+     |
+     v
 [Assembly Engine]
-     ↓
+     |
+     v
 [Output Engine]
 ```
 
@@ -208,6 +247,38 @@ Centralize:
 - object creation
 - document access
 
+### Incremental Refactoring Rule
+
+Do not rewrite working production workflows unnecessarily.
+
+Preferred approach:
+
+1. Extract logic from `SET_MainForm`
+2. Preserve public behavior
+3. Introduce service classes
+4. Introduce typed request/config objects
+5. Only then introduce stronger geometry / assembly automation
+
+### Current Refactoring Boundary
+
+The following workflows should now be treated as service-owned logic and extended there rather than re-expanded inside the form:
+
+- BOM generation
+- STL/STP export
+- DXF export
+- DFT generation
+- DFT publish to PDF/DWG
+- image export
+- occurrence traversal
+
+The form should progressively become:
+
+- input collection
+- command orchestration
+- user feedback
+
+Not the main location for CAD/business logic.
+
 ---
 
 ## 10. Suggested Class Structure
@@ -238,10 +309,34 @@ End Class
 
 ---
 
+### 10.1 Current Implemented Structure
+
+The repository already contains a first practical structure aligned with the above direction:
+
+```text
+SET_MainForm
+  -> SolidEdgeSessionHelpers
+  -> FilePropertyService
+  -> MaterialFilter
+  -> BomService
+  -> NeutralExportService
+  -> FlatDxfExportService
+  -> DraftGenerationService
+  -> DraftPublishService
+  -> ImageExportService
+  -> OccurrenceWalker
+```
+
+This should be considered the current baseline for future refactoring.
+
+Future additions should build on this structure rather than reintroducing logic into the form.
+
+---
+
 ## 11. Execution Flow
 
 ```text
-INPUT → CONFIG → GEOMETRY → ASSEMBLY → EXPORT
+INPUT -> CONFIG -> GEOMETRY -> ASSEMBLY -> EXPORT
 ```
 
 Example:
@@ -275,7 +370,7 @@ Solid Edge V20 API supports:
 - Feature-based only
 - Older API
 
-✔ Still fully usable for advanced automation
+Still fully usable for advanced automation.
 
 ---
 
@@ -313,6 +408,35 @@ Codex should:
 
 ---
 
+## 16.1 Updated Next Steps After Current Refactoring
+
+The first extraction step is already underway and partially completed.
+
+Recommended next sequence from the current repository state:
+
+1. Introduce typed request/options classes to remove direct UI-control coupling from workflows
+2. Harden COM lifecycle management for transient COM objects inside technical export routines
+3. Consolidate Solid Edge session ownership rules so the tool does not accidentally close a user-owned session
+4. Introduce a configuration layer for product/input intent
+5. Add template-driven geometry services for `.par` / `.psm`
+6. Add assembly-composition services only after stable template and configuration patterns exist
+
+Near-term priority:
+
+- stabilize architecture
+- reduce COM risk
+- preserve current production outputs
+
+Before any major geometry automation:
+
+- named references
+- template discipline
+- deterministic document lifecycle
+
+must be in place.
+
+---
+
 ## Final Note
 
 This document is designed to support:
@@ -322,3 +446,20 @@ This document is designed to support:
 - scalable architecture
 
 Not a tutorial, but a **foundation for a production-ready CAD engine**.
+
+---
+
+## Reference Material
+
+Use the following references when reasoning about Solid Edge API and COM behavior:
+
+- https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/ProgrammersGuide.html
+- https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeFramework~Application.html
+- https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgePart_P.html
+- https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeAssembly_P.html
+- https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeDraft_P.html
+- https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/V20SP11-WhatsNew.html
+- https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.marshal.releasecomobject
+- https://learn.microsoft.com/en-us/dotnet/standard/native-interop/cominterop
+
+When there is ambiguity, prioritize compatibility with Solid Edge V20 (COM-based API, no synchronous technology).

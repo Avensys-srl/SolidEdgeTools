@@ -140,8 +140,8 @@ Public Class SET_MainForm
         End Try
 
     End Sub
-    Private Function PsmGetProperty(path As String, _
-                                    propertySetName As String, _
+    Private Function PsmGetProperty(path As String,
+                                    propertySetName As String,
                                     propertyName As String)
         Return FilePropertyService.GetPropertyValue(path, propertySetName, propertyName)
     End Function
@@ -1008,44 +1008,15 @@ Public Class SET_MainForm
     Public Function ConvertDisegniDiPiegaToPdf_Execute(inputDFTDirectory As String) As Boolean
 
         Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim psmFiles As New Dictionary(Of String, Integer)
-        Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
-        Dim outPDFFilePath As String
+        Dim publishService As New DraftPublishService()
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
 
             seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            For Each dftPath As String In Directory.GetFiles(inputDFTDirectory, "*.dft")
-
-                ' Load file dft
-                objDraft = seDocuments.Open(dftPath)
-
-                outPDFFilePath = Path.Combine(Path.GetDirectoryName(dftPath), "Pdf",
-                    Path.GetFileNameWithoutExtension(dftPath) + ".pdf")
-
-                If Not Directory.Exists(Path.GetDirectoryName(outPDFFilePath)) Then
-                    Directory.CreateDirectory(Path.GetDirectoryName(outPDFFilePath))
-                End If
-
-                If File.Exists(outPDFFilePath) Then
-                    File.Delete(outPDFFilePath)
-                End If
-
-                objDraft.PrintOut("Adobe PDF",
-                    Orientation:=Microsoft.VisualBasic.PowerPacks.Printing.Compatibility.VB6.PrinterObjectConstants.vbPRORLandscape)
-
-                objDraft.Close()
-
-                ReleaseCOMReference(objDraft)
-
-            Next
+            publishService.PublishPdf(seApplication, inputDFTDirectory)
 
         Finally
-            ReleaseCOMReference(seDocuments)
             SE_CloseApplication(seApplication, True)
         End Try
 
@@ -1056,43 +1027,15 @@ Public Class SET_MainForm
     Public Function ConvertDisegniDiPiegaToDWG_Execute(inputDFTDirectory As String) As Boolean
 
         Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim psmFiles As New Dictionary(Of String, Integer)
-        Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
-        Dim outPDFFilePath As String
+        Dim publishService As New DraftPublishService()
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
 
             seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            For Each dftPath As String In Directory.GetFiles(inputDFTDirectory, "*.dft")
-
-                ' Load file dft
-                objDraft = seDocuments.Open(dftPath)
-
-                outPDFFilePath = Path.Combine(Path.GetDirectoryName(dftPath), "DWG",
-                    Path.GetFileNameWithoutExtension(dftPath) + ".dwg")
-
-                If Not Directory.Exists(Path.GetDirectoryName(outPDFFilePath)) Then
-                    Directory.CreateDirectory(Path.GetDirectoryName(outPDFFilePath))
-                End If
-
-                If File.Exists(outPDFFilePath) Then
-                    File.Delete(outPDFFilePath)
-                End If
-
-                objDraft.SaveAs(outPDFFilePath)
-
-                objDraft.Close()
-
-                ReleaseCOMReference(objDraft)
-
-            Next
+            publishService.PublishDwg(seApplication, inputDFTDirectory)
 
         Finally
-            ReleaseCOMReference(seDocuments)
             SE_CloseApplication(seApplication, True)
         End Try
 
@@ -1165,7 +1108,9 @@ Public Class SET_MainForm
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim occurrenceFileNames As New Dictionary(Of String, Integer)
+        Dim exportService As New ImageExportService(AddressOf CheckMaterial,
+                                                    AddressOf ExportPartDocumentImage,
+                                                    AddressOf DisplayException)
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
@@ -1176,7 +1121,7 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If Not ExportJPG_ScanNode(seApplication, occurrenceFileNames, seAssembly, seAssembly.Occurrences) Then
+            If Not exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, all_subasm.Checked) Then
                 Return False
             End If
 
@@ -1187,66 +1132,6 @@ Public Class SET_MainForm
         End Try
 
         Return True
-    End Function
-
-    Public Function ExportJPG_ScanNode(ByVal seApplication As SolidEdgeFramework.Application,
-                                    ByVal occurrenceFileNames As Dictionary(Of String, Integer),
-                                    objRootAssembly As SolidEdgeAssembly.AssemblyDocument,
-                                    ByVal occurrences As SolidEdgeAssembly.Occurrences) As Boolean
-
-        For Each item As SolidEdgeAssembly.Occurrence In occurrences
-
-            Select Case item.Type
-                Case SolidEdgeFramework.ObjectType.igSubAssembly
-
-                    If all_subasm.Checked = True Then
-                        ExportJPG_ScanNode(seApplication, occurrenceFileNames, objRootAssembly, item.OccurrenceDocument.Occurrences)
-                    End If
-
-
-                Case SolidEdgeFramework.ObjectType.igPart
-
-                    If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-
-                        If CheckMaterial(PsmGetProperty(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-
-                            If Not occurrenceFileNames.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        ExportPartDocumentImage(seApplication,
-                                       item.OccurrenceFileName,
-                                       Path.Combine(objRootAssembly.Path,
-                                        "image", Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), "jpg")))
-
-                                        occurrenceFileNames.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante l'esportazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-
-                                Loop
-
-                            End If
-                        End If
-
-                    End If
-
-            End Select
-
-        Next
-
-        Return True
-
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click

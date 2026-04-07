@@ -129,9 +129,12 @@
     <Compile Include="Services\FilePropertyService.vb" />
     <Compile Include="Services\BomService.vb" />
     <Compile Include="Services\DraftGenerationService.vb" />
+    <Compile Include="Services\DraftPublishService.vb" />
     <Compile Include="Services\FlatDxfExportService.vb" />
+    <Compile Include="Services\ImageExportService.vb" />
     <Compile Include="Services\MaterialFilter.vb" />
     <Compile Include="Services\NeutralExportService.vb" />
+    <Compile Include="Services\OccurrenceWalker.vb" />
     <Compile Include="SET_MainForm.vb">
       <SubType>Form</SubType>
     </Compile>
