@@ -67,18 +67,11 @@ Public Class SET_MainForm
         Catch exception As Exception
             DisplayException(exception)
         Finally
-            If Not objProp Is Nothing Then
-                Marshal.ReleaseComObject(objProp)
-                objProp = Nothing
-            End If
-            If Not objProps Is Nothing Then
-                Marshal.ReleaseComObject(objProps)
-                objProps = Nothing
-            End If
+            ReleaseCOMReference(objProp)
+            ReleaseCOMReference(objProps)
             If Not objPropSets Is Nothing Then
                 objPropSets.Close()
-                Marshal.ReleaseComObject(objPropSets)
-                objPropSets = Nothing
+                ReleaseCOMReference(objPropSets)
             End If
             ReleaseCOMReference(objDocuments)
             SE_CloseApplication(session, True)
@@ -301,8 +294,9 @@ Public Class SET_MainForm
             Catch
             End Try
         Finally
-            objxlOutSheet = Nothing
-            objxlOutWBook = Nothing
+            ReleaseCOMReference(objxlRange)
+            ReleaseCOMReference(objxlOutSheet)
+            ReleaseCOMReference(objxlOutWBook)
             If Not IsNothing(objxlOutApp) Then
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(objxlOutApp) 'This will release the object reference
             End If
@@ -404,12 +398,7 @@ Public Class SET_MainForm
         Dim seRefPlanes As SolidEdgePart.RefPlanes = Nothing
         Dim seRefSketchs As SolidEdgePart.Sketchs = Nothing
         Dim seView As SolidEdgeFramework.View = Nothing
-        Dim seViewStyle As SolidEdgeFramework.ViewStyle = Nothing
         Dim seWindow As SolidEdgeFramework.Window = Nothing
-        Dim seSketch As SolidEdgePart.Sketch = Nothing
-        Dim seNamedViews As SolidEdgeFramework.NamedViews = Nothing
-        Dim index As Integer = 0
-        Dim view As Object = Nothing
 
 
         Try
@@ -451,6 +440,10 @@ Public Class SET_MainForm
             sePARDocument.Close()
 
         Finally
+            ReleaseCOMReference(seView)
+            ReleaseCOMReference(seWindow)
+            ReleaseCOMReference(seRefPlanes)
+            ReleaseCOMReference(seRefSketchs)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(sePARDocument)
         End Try
@@ -464,6 +457,7 @@ Public Class SET_MainForm
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim sePSMDocument As SolidEdgePart.SheetMetalDocument = Nothing
+        Dim seModels As Object = Nothing
         Dim seBody As SolidEdgeGeometry.Body = Nothing
         Dim seFace As SolidEdgeGeometry.Face = Nothing
         Dim seBiggestFace As SolidEdgeGeometry.Face = Nothing
@@ -481,7 +475,8 @@ Public Class SET_MainForm
 
 
 
-            seBody = sePSMDocument.Models.Item(1).Body
+            seModels = sePSMDocument.Models
+            seBody = seModels.Item(1).Body
 
             For t = 1 To seBody.Faces(FaceType:=SolidEdgeConstants.FeatureTopologyQueryTypeConstants.igQueryAll).Count
 
@@ -541,7 +536,7 @@ Public Class SET_MainForm
                     Directory.CreateDirectory(Path.GetDirectoryName(outFilePath))
                 End If
 
-                sePSMDocument.Models.SaveAsFlatDXF(outFilePath, seBiggestFace, seFirstEdge, seStartVertex)
+                seModels.SaveAsFlatDXF(outFilePath, seBiggestFace, seFirstEdge, seStartVertex)
 
             ElseIf seStartVertex Is Nothing AndAlso cir_on.Checked = True Then
 
@@ -549,13 +544,19 @@ Public Class SET_MainForm
                     Directory.CreateDirectory(Path.GetDirectoryName(outFilePath))
                 End If
 
-                sePSMDocument.Models.SaveAsFlatDXF(outFilePath, seBiggestFace, seFirstEdge, seFirstEdge)
+                seModels.SaveAsFlatDXF(outFilePath, seBiggestFace, seFirstEdge, seFirstEdge)
 
             End If
 
             sePSMDocument.Close()
 
         Finally
+            ReleaseCOMReference(seStartVertex)
+            ReleaseCOMReference(seFirstEdge)
+            ReleaseCOMReference(seBiggestFace)
+            ReleaseCOMReference(seFace)
+            ReleaseCOMReference(seBody)
+            ReleaseCOMReference(seModels)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(sePSMDocument)
         End Try
@@ -615,6 +616,7 @@ Public Class SET_MainForm
         Dim objModelLink As SolidEdgeDraft.ModelLink = Nothing
         Dim objDrawingViews As SolidEdgeDraft.DrawingViews = Nothing
         Dim objDrawingView As SolidEdgeDraft.DrawingView = Nothing
+        Dim objFoldedView As SolidEdgeDraft.DrawingView = Nothing
 
         Try
             objDocuments = seApplication.Documents
@@ -645,13 +647,15 @@ Public Class SET_MainForm
                 0.3,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
 
-                objDrawingViews.AddByFold(objDrawingView,
+                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                     SolidEdgeDraft.FoldTypeConstants.igFoldRight,
                     0.3, 0.3)
-                objDrawingViews.AddByFold(objDrawingView,
+                ReleaseCOMReference(objFoldedView)
+                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                     SolidEdgeDraft.FoldTypeConstants.igFoldDown,
                     0.1, 0.1)
-                objDrawingViews.AddByFold(objDrawingView,
+                ReleaseCOMReference(objFoldedView)
+                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                 SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
                 0.3, 0.1)
             End If
@@ -687,6 +691,7 @@ Public Class SET_MainForm
             objDraft.Close()
 
         Finally
+            ReleaseCOMReference(objFoldedView)
             ReleaseCOMReference(objDocuments)
             ReleaseCOMReference(objDraft)
             ReleaseCOMReference(objSheet)
@@ -762,8 +767,8 @@ Public Class SET_MainForm
         Dim objDrawingViews As SolidEdgeDraft.DrawingViews = Nothing
         Dim objDrawingView As SolidEdgeDraft.DrawingView = Nothing
         Dim seView As SolidEdgeFramework.View = Nothing
-        Dim seViewStyle As SolidEdgeFramework.ViewStyle = Nothing
         Dim seWindow As SolidEdgeFramework.Window = Nothing
+        Dim objFoldedView As SolidEdgeDraft.DrawingView = Nothing
 
         Try
             objDocuments = seApplication.Documents
@@ -792,13 +797,15 @@ Public Class SET_MainForm
                 0.3,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
 
-            objDrawingViews.AddByFold(objDrawingView,
+            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                 SolidEdgeDraft.FoldTypeConstants.igFoldRight,
                 0.3, 0.3)
-            objDrawingViews.AddByFold(objDrawingView,
+            ReleaseCOMReference(objFoldedView)
+            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                 SolidEdgeDraft.FoldTypeConstants.igFoldDown,
                 0.1, 0.1)
-            objDrawingViews.AddByFold(objDrawingView,
+            ReleaseCOMReference(objFoldedView)
+            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
                 SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
                 0.3, 0.1)
 
@@ -847,6 +854,9 @@ Public Class SET_MainForm
             objDraft.Close()
 
         Finally
+            ReleaseCOMReference(seView)
+            ReleaseCOMReference(seWindow)
+            ReleaseCOMReference(objFoldedView)
             ReleaseCOMReference(objDocuments)
             ReleaseCOMReference(objDraft)
             ReleaseCOMReference(objSheet)
@@ -900,9 +910,9 @@ Public Class SET_MainForm
             End If
 
         Finally
-            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -963,9 +973,9 @@ Public Class SET_MainForm
             End If
 
         Finally
-            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -1017,6 +1027,7 @@ Public Class SET_MainForm
             publishService.PublishPdf(seApplication, publishOptions)
 
         Finally
+            ' No child documents are retained here, close the session last.
             SE_CloseApplication(session, True)
         End Try
 
@@ -1039,6 +1050,7 @@ Public Class SET_MainForm
             publishService.PublishDwg(seApplication, publishOptions)
 
         Finally
+            ' No child documents are retained here, close the session last.
             SE_CloseApplication(session, True)
         End Try
 
@@ -1132,9 +1144,9 @@ Public Class SET_MainForm
             End If
 
         Finally
-            SE_CloseApplication(session, True)
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
+            SE_CloseApplication(session, True)
         End Try
 
         Return True
@@ -1184,18 +1196,11 @@ Public Class SET_MainForm
         Catch exception As Exception
             DisplayException(exception)
         Finally
-            If Not objProp Is Nothing Then
-                Marshal.ReleaseComObject(objProp)
-                objProp = Nothing
-            End If
-            If Not objProps Is Nothing Then
-                Marshal.ReleaseComObject(objProps)
-                objProps = Nothing
-            End If
+            ReleaseCOMReference(objProp)
+            ReleaseCOMReference(objProps)
             If Not objPropSets Is Nothing Then
                 objPropSets.Close()
-                Marshal.ReleaseComObject(objPropSets)
-                objPropSets = Nothing
+                ReleaseCOMReference(objPropSets)
             End If
             ReleaseCOMReference(objDocuments)
             SE_CloseApplication(session, True)
