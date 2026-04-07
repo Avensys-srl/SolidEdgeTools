@@ -4,6 +4,8 @@ Imports System.IO
 
 Public Class SET_MainForm
 
+    Private ReadOnly _workflowService As New SolidEdgeWorkflowService()
+
 
 #Region "====[ Generate BOM ]===="
 
@@ -83,48 +85,35 @@ Public Class SET_MainForm
     End Sub
 
     Private Sub BOM_Generate(PropBom As Boolean)
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim objApp As SolidEdgeFramework.Application = Nothing
-        Dim objDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim objAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim bomService As New BomService(AddressOf PsmGetProperty)
-        Dim bomAssembly As BOMAssembly
         Dim bomOptions = GetBomExportOptions()
-        Dim xlsArray As Array
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
                 sfdSelectXLSFile.FileName = "Lista_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
                 If sfdSelectXLSFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
+                    _workflowService.ExecuteWithAssembly(
+                        ofdSelectASMFile.FileName,
+                        GetApplicationOptions(),
+                        False,
+                        Function(app, assembly)
+                            Dim bomAssembly = bomService.Build(assembly.FullName, assembly.Occurrences)
+                            Dim xlsArray As Array
 
-                    session = SolidEdgeSessionHelpers.OpenApplication(True)
-                    objApp = session.Application
-                    ' Turn off alerts. Weldment environment will display a warning
-                    objApp.DisplayAlerts = False
-                    ' Get a reference to the Documents collection
-                    objDocuments = objApp.Documents
-                    ' Create an instance of each document environment
-                    objAssembly = objDocuments.Open(ofdSelectASMFile.FileName)
+                            If PropBom Then
+                                xlsArray = bomService.ToPropertyArray(bomAssembly, bomOptions)
+                            Else
+                                xlsArray = bomService.ToSupplierArray(bomAssembly, bomOptions)
+                            End If
 
-                    bomAssembly = bomService.Build(objAssembly.FullName, objAssembly.Occurrences)
-
-                    If PropBom Then
-                        xlsArray = bomService.ToPropertyArray(bomAssembly, bomOptions)
-                    Else
-                        xlsArray = bomService.ToSupplierArray(bomAssembly, bomOptions)
-                    End If
-
-                    WriteSpreadsheetFromArray(xlsArray, sfdSelectXLSFile.FileName)
-
+                            WriteSpreadsheetFromArray(xlsArray, sfdSelectXLSFile.FileName)
+                            Return True
+                        End Function)
                 End If
             End If
 
         Catch exception As Exception
             DisplayException(exception)
-        Finally
-            ReleaseCOMReference(objAssembly)
-            ReleaseCOMReference(objDocuments)
-            SE_CloseApplication(session, True)
         End Try
 
     End Sub
@@ -571,36 +560,15 @@ Public Class SET_MainForm
 #Region "====[ Generate 'Disegni di Piega' ]===="
 
     Public Function GenerateDisegniDiPiega_Execute(asmFilePath As String) As Boolean
-
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim draftOptions = GetDraftGenerationOptions()
         Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
                                                        AddressOf DisplayException)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            ' Load file asm
-            seAssembly = seDocuments.Open(asmFilePath)
-
-            If draftService.GenerateForAssembly(seApplication, seAssembly, draftOptions) = False Then
-                Return False
-            End If
-
-        Finally
-            ReleaseCOMReference(seDocuments)
-            ReleaseCOMReference(seAssembly)
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithAssembly(
+            asmFilePath,
+            GetApplicationOptions(),
+            False,
+            Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions))
 
     End Function
 
@@ -885,37 +853,16 @@ Public Class SET_MainForm
 #Region "====[ Export to STL/STP (PAR/PSM) ]===="
 
     Public Function Export_Execute(asmFilePath As String, type As String) As Boolean
-
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim exportOptions = GetNeutralExportOptions(type)
         Dim exportService As New NeutralExportService(AddressOf ExportPartDocument,
                                                       AddressOf ExportSheetMetalDocumentDocument,
                                                       AddressOf DisplayException)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            ' Load asm file
-            seAssembly = seDocuments.Open(asmFilePath)
-
-            If exportService.ExportAssembly(seApplication, seAssembly, exportOptions) = False Then
-                Return False
-            End If
-
-        Finally
-            ReleaseCOMReference(seDocuments)
-            ReleaseCOMReference(seAssembly)
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithAssembly(
+            asmFilePath,
+            GetApplicationOptions(),
+            False,
+            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
     End Function
 
     Private Sub btnExportSTL_Click(sender As System.Object, e As System.EventArgs) Handles btnExportSTL.Click
@@ -949,36 +896,15 @@ Public Class SET_MainForm
 #Region "====[ Export to DXF (PSM) ]===="
 
     Public Function ExportDXF_Execute(asmFilePath As String) As Boolean
-
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim exportOptions = GetFlatDxfExportOptions()
         Dim exportService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
                                                       AddressOf DisplayException)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            ' Load asm file
-            seAssembly = seDocuments.Open(asmFilePath)
-
-            If Not exportService.ExportAssembly(seApplication, seAssembly, exportOptions) Then
-                Return False
-            End If
-
-        Finally
-            ReleaseCOMReference(seDocuments)
-            ReleaseCOMReference(seAssembly)
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithAssembly(
+            asmFilePath,
+            GetApplicationOptions(),
+            False,
+            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
 
     End Function
 
@@ -1014,47 +940,31 @@ Public Class SET_MainForm
 
     Public Function ConvertDisegniDiPiegaToPdf_Execute(inputDFTDirectory As String) As Boolean
 
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim publishService As New DraftPublishService()
         Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            publishService.PublishPdf(seApplication, publishOptions)
-
-        Finally
-            ' No child documents are retained here, close the session last.
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithApplication(
+            GetApplicationOptions(),
+            False,
+            Function(app)
+                publishService.PublishPdf(app, publishOptions)
+                Return True
+            End Function)
 
     End Function
 
     Public Function ConvertDisegniDiPiegaToDWG_Execute(inputDFTDirectory As String) As Boolean
 
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim publishService As New DraftPublishService()
         Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            publishService.PublishDwg(seApplication, publishOptions)
-
-        Finally
-            ' No child documents are retained here, close the session last.
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithApplication(
+            GetApplicationOptions(),
+            False,
+            Function(app)
+                publishService.PublishDwg(app, publishOptions)
+                Return True
+            End Function)
 
     End Function
 
@@ -1119,37 +1029,16 @@ Public Class SET_MainForm
     End Sub
 
     Public Function ExportJPG_Execute(asmFilePath As String) As Boolean
-
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
-        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
         Dim exportOptions = GetImageExportOptions()
         Dim draftOptions = GetDraftGenerationOptions()
         Dim exportService As New ImageExportService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportJPG(app, outputPath, modelLinkPath, draftOptions.Scale),
                                                     AddressOf DisplayException)
 
-        Try
-            session = SE_OpenApplication(GetApplicationOptions())
-            seApplication = session.Application
-
-            seApplication.DisplayAlerts = False
-            seDocuments = seApplication.Documents
-
-            ' Load asm file
-            seAssembly = seDocuments.Open(asmFilePath)
-
-            If Not exportService.ExportAssembly(seApplication, seAssembly, exportOptions) Then
-                Return False
-            End If
-
-        Finally
-            ReleaseCOMReference(seDocuments)
-            ReleaseCOMReference(seAssembly)
-            SE_CloseApplication(session, True)
-        End Try
-
-        Return True
+        Return _workflowService.ExecuteWithAssembly(
+            asmFilePath,
+            GetApplicationOptions(),
+            False,
+            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click
