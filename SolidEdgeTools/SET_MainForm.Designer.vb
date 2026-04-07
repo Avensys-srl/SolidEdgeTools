@@ -54,11 +54,12 @@ Partial Class SET_MainForm
         Me.btnCodificaProgetto = New System.Windows.Forms.Button()
         Me.btnExportSTP = New System.Windows.Forms.Button()
         Me.btnConvertDisegniDiPiegaToDWG = New System.Windows.Forms.Button()
+        Me.lblVersion = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'btnPropTable
         '
-        Me.btnPropTable.Location = New System.Drawing.Point(105, 12)
+        Me.btnPropTable.Location = New System.Drawing.Point(105, 36)
         Me.btnPropTable.Name = "btnPropTable"
         Me.btnPropTable.Size = New System.Drawing.Size(117, 25)
         Me.btnPropTable.TabIndex = 0
@@ -67,7 +68,7 @@ Partial Class SET_MainForm
         '
         'btnGenerateDisegniDiPiega
         '
-        Me.btnGenerateDisegniDiPiega.Location = New System.Drawing.Point(12, 74)
+        Me.btnGenerateDisegniDiPiega.Location = New System.Drawing.Point(12, 98)
         Me.btnGenerateDisegniDiPiega.Name = "btnGenerateDisegniDiPiega"
         Me.btnGenerateDisegniDiPiega.Size = New System.Drawing.Size(185, 25)
         Me.btnGenerateDisegniDiPiega.TabIndex = 0
@@ -76,7 +77,7 @@ Partial Class SET_MainForm
         '
         'btnExportDXF
         '
-        Me.btnExportDXF.Location = New System.Drawing.Point(143, 43)
+        Me.btnExportDXF.Location = New System.Drawing.Point(143, 67)
         Me.btnExportDXF.Name = "btnExportDXF"
         Me.btnExportDXF.Size = New System.Drawing.Size(79, 25)
         Me.btnExportDXF.TabIndex = 0
@@ -85,7 +86,7 @@ Partial Class SET_MainForm
         '
         'btnExportSTL
         '
-        Me.btnExportSTL.Location = New System.Drawing.Point(228, 43)
+        Me.btnExportSTL.Location = New System.Drawing.Point(228, 67)
         Me.btnExportSTL.Name = "btnExportSTL"
         Me.btnExportSTL.Size = New System.Drawing.Size(74, 25)
         Me.btnExportSTL.TabIndex = 0
@@ -104,7 +105,7 @@ Partial Class SET_MainForm
         '
         'Prefisso
         '
-        Me.Prefisso.Location = New System.Drawing.Point(95, 199)
+        Me.Prefisso.Location = New System.Drawing.Point(95, 223)
         Me.Prefisso.Multiline = True
         Me.Prefisso.Name = "Prefisso"
         Me.Prefisso.Size = New System.Drawing.Size(202, 20)
@@ -113,7 +114,7 @@ Partial Class SET_MainForm
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.Location = New System.Drawing.Point(12, 202)
+        Me.Label1.Location = New System.Drawing.Point(12, 226)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(77, 13)
         Me.Label1.TabIndex = 2
@@ -122,7 +123,7 @@ Partial Class SET_MainForm
         'se_off
         '
         Me.se_off.AutoSize = True
-        Me.se_off.Location = New System.Drawing.Point(139, 115)
+        Me.se_off.Location = New System.Drawing.Point(139, 139)
         Me.se_off.Name = "se_off"
         Me.se_off.Size = New System.Drawing.Size(118, 17)
         Me.se_off.TabIndex = 3
@@ -131,7 +132,7 @@ Partial Class SET_MainForm
         '
         'btnGenerateBOMSupplier
         '
-        Me.btnGenerateBOMSupplier.Location = New System.Drawing.Point(12, 43)
+        Me.btnGenerateBOMSupplier.Location = New System.Drawing.Point(12, 67)
         Me.btnGenerateBOMSupplier.Name = "btnGenerateBOMSupplier"
         Me.btnGenerateBOMSupplier.Size = New System.Drawing.Size(125, 25)
         Me.btnGenerateBOMSupplier.TabIndex = 0
@@ -140,7 +141,7 @@ Partial Class SET_MainForm
         '
         'btnConvertDisegniDiPiegaToPdf
         '
-        Me.btnConvertDisegniDiPiegaToPdf.Location = New System.Drawing.Point(202, 74)
+        Me.btnConvertDisegniDiPiegaToPdf.Location = New System.Drawing.Point(202, 98)
         Me.btnConvertDisegniDiPiegaToPdf.Name = "btnConvertDisegniDiPiegaToPdf"
         Me.btnConvertDisegniDiPiegaToPdf.Size = New System.Drawing.Size(81, 25)
         Me.btnConvertDisegniDiPiegaToPdf.TabIndex = 0
@@ -152,7 +153,7 @@ Partial Class SET_MainForm
         Me.all_subasm.AutoSize = True
         Me.all_subasm.Checked = True
         Me.all_subasm.CheckState = System.Windows.Forms.CheckState.Checked
-        Me.all_subasm.Location = New System.Drawing.Point(270, 115)
+        Me.all_subasm.Location = New System.Drawing.Point(270, 139)
         Me.all_subasm.Name = "all_subasm"
         Me.all_subasm.Size = New System.Drawing.Size(150, 17)
         Me.all_subasm.TabIndex = 4
@@ -162,7 +163,7 @@ Partial Class SET_MainForm
         'cir_on
         '
         Me.cir_on.AutoSize = True
-        Me.cir_on.Location = New System.Drawing.Point(12, 115)
+        Me.cir_on.Location = New System.Drawing.Point(12, 139)
         Me.cir_on.Name = "cir_on"
         Me.cir_on.Size = New System.Drawing.Size(121, 17)
         Me.cir_on.TabIndex = 5
@@ -172,7 +173,7 @@ Partial Class SET_MainForm
         'SoloMateriale
         '
         Me.SoloMateriale.AutoSize = True
-        Me.SoloMateriale.Location = New System.Drawing.Point(426, 115)
+        Me.SoloMateriale.Location = New System.Drawing.Point(426, 139)
         Me.SoloMateriale.Name = "SoloMateriale"
         Me.SoloMateriale.Size = New System.Drawing.Size(129, 17)
         Me.SoloMateriale.TabIndex = 6
@@ -183,7 +184,7 @@ Partial Class SET_MainForm
         '
         Me.SubFolders.AutoSize = True
         Me.SubFolders.Enabled = False
-        Me.SubFolders.Location = New System.Drawing.Point(562, 115)
+        Me.SubFolders.Location = New System.Drawing.Point(562, 139)
         Me.SubFolders.Name = "SubFolders"
         Me.SubFolders.Size = New System.Drawing.Size(110, 17)
         Me.SubFolders.TabIndex = 8
@@ -194,7 +195,7 @@ Partial Class SET_MainForm
         '
         Me.Material.FormattingEnabled = True
         Me.Material.Items.AddRange(New Object() {"LAMIERA ZN", "LAMIERA ZNVN", "LAMIERA ZNVV", "LAMIERA FESD", "FabLab", "Polistirolo", "PPE"})
-        Me.Material.Location = New System.Drawing.Point(391, 12)
+        Me.Material.Location = New System.Drawing.Point(391, 36)
         Me.Material.MultiColumn = True
         Me.Material.Name = "Material"
         Me.Material.Size = New System.Drawing.Size(281, 94)
@@ -206,7 +207,7 @@ Partial Class SET_MainForm
         '
         'bntPropBOM
         '
-        Me.bntPropBOM.Location = New System.Drawing.Point(12, 12)
+        Me.bntPropBOM.Location = New System.Drawing.Point(12, 36)
         Me.bntPropBOM.Name = "bntPropBOM"
         Me.bntPropBOM.Size = New System.Drawing.Size(87, 25)
         Me.bntPropBOM.TabIndex = 10
@@ -216,7 +217,7 @@ Partial Class SET_MainForm
         'btnExportJPG
         '
         Me.btnExportJPG.Enabled = False
-        Me.btnExportJPG.Location = New System.Drawing.Point(228, 12)
+        Me.btnExportJPG.Location = New System.Drawing.Point(228, 36)
         Me.btnExportJPG.Name = "btnExportJPG"
         Me.btnExportJPG.Size = New System.Drawing.Size(74, 25)
         Me.btnExportJPG.TabIndex = 11
@@ -226,7 +227,7 @@ Partial Class SET_MainForm
         'Label2
         '
         Me.Label2.AutoSize = True
-        Me.Label2.Location = New System.Drawing.Point(558, 205)
+        Me.Label2.Location = New System.Drawing.Point(558, 229)
         Me.Label2.Name = "Label2"
         Me.Label2.Size = New System.Drawing.Size(58, 13)
         Me.Label2.TabIndex = 12
@@ -234,7 +235,7 @@ Partial Class SET_MainForm
         '
         'txtScale
         '
-        Me.txtScale.Location = New System.Drawing.Point(622, 202)
+        Me.txtScale.Location = New System.Drawing.Point(622, 226)
         Me.txtScale.Multiline = True
         Me.txtScale.Name = "txtScale"
         Me.txtScale.Size = New System.Drawing.Size(50, 20)
@@ -245,7 +246,7 @@ Partial Class SET_MainForm
         'Label3
         '
         Me.Label3.AutoSize = True
-        Me.Label3.Location = New System.Drawing.Point(200, 146)
+        Me.Label3.Location = New System.Drawing.Point(200, 170)
         Me.Label3.Name = "Label3"
         Me.Label3.Size = New System.Drawing.Size(83, 13)
         Me.Label3.TabIndex = 2
@@ -253,7 +254,7 @@ Partial Class SET_MainForm
         '
         'txtVersione
         '
-        Me.txtVersione.Location = New System.Drawing.Point(466, 143)
+        Me.txtVersione.Location = New System.Drawing.Point(466, 167)
         Me.txtVersione.Multiline = True
         Me.txtVersione.Name = "txtVersione"
         Me.txtVersione.Size = New System.Drawing.Size(66, 20)
@@ -262,7 +263,7 @@ Partial Class SET_MainForm
         'Label4
         '
         Me.Label4.AutoSize = True
-        Me.Label4.Location = New System.Drawing.Point(412, 146)
+        Me.Label4.Location = New System.Drawing.Point(412, 170)
         Me.Label4.Name = "Label4"
         Me.Label4.Size = New System.Drawing.Size(48, 13)
         Me.Label4.TabIndex = 2
@@ -270,7 +271,7 @@ Partial Class SET_MainForm
         '
         'txtProgetto
         '
-        Me.txtProgetto.Location = New System.Drawing.Point(289, 143)
+        Me.txtProgetto.Location = New System.Drawing.Point(289, 167)
         Me.txtProgetto.Multiline = True
         Me.txtProgetto.Name = "txtProgetto"
         Me.txtProgetto.Size = New System.Drawing.Size(117, 20)
@@ -279,7 +280,7 @@ Partial Class SET_MainForm
         'Label5
         '
         Me.Label5.AutoSize = True
-        Me.Label5.Location = New System.Drawing.Point(538, 146)
+        Me.Label5.Location = New System.Drawing.Point(538, 170)
         Me.Label5.Name = "Label5"
         Me.Label5.Size = New System.Drawing.Size(62, 13)
         Me.Label5.TabIndex = 2
@@ -287,7 +288,7 @@ Partial Class SET_MainForm
         '
         'txtProgressivo
         '
-        Me.txtProgressivo.Location = New System.Drawing.Point(606, 143)
+        Me.txtProgressivo.Location = New System.Drawing.Point(606, 167)
         Me.txtProgressivo.Multiline = True
         Me.txtProgressivo.Name = "txtProgressivo"
         Me.txtProgressivo.Size = New System.Drawing.Size(66, 20)
@@ -295,7 +296,7 @@ Partial Class SET_MainForm
         '
         'btnCodificaProgetto
         '
-        Me.btnCodificaProgetto.Location = New System.Drawing.Point(12, 140)
+        Me.btnCodificaProgetto.Location = New System.Drawing.Point(12, 164)
         Me.btnCodificaProgetto.Name = "btnCodificaProgetto"
         Me.btnCodificaProgetto.Size = New System.Drawing.Size(185, 25)
         Me.btnCodificaProgetto.TabIndex = 0
@@ -304,7 +305,7 @@ Partial Class SET_MainForm
         '
         'btnExportSTP
         '
-        Me.btnExportSTP.Location = New System.Drawing.Point(308, 43)
+        Me.btnExportSTP.Location = New System.Drawing.Point(308, 67)
         Me.btnExportSTP.Name = "btnExportSTP"
         Me.btnExportSTP.Size = New System.Drawing.Size(77, 25)
         Me.btnExportSTP.TabIndex = 15
@@ -313,20 +314,32 @@ Partial Class SET_MainForm
         '
         'btnConvertDisegniDiPiegaToDWG
         '
-        Me.btnConvertDisegniDiPiegaToDWG.Location = New System.Drawing.Point(289, 74)
+        Me.btnConvertDisegniDiPiegaToDWG.Location = New System.Drawing.Point(289, 98)
         Me.btnConvertDisegniDiPiegaToDWG.Name = "btnConvertDisegniDiPiegaToDWG"
         Me.btnConvertDisegniDiPiegaToDWG.Size = New System.Drawing.Size(96, 25)
         Me.btnConvertDisegniDiPiegaToDWG.TabIndex = 0
         Me.btnConvertDisegniDiPiegaToDWG.Text = "DFT --> DWG"
         Me.btnConvertDisegniDiPiegaToDWG.UseVisualStyleBackColor = True
         '
+        'lblVersion
+        '
+        Me.lblVersion.Anchor = CType((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
+        Me.lblVersion.AutoSize = False
+        Me.lblVersion.Location = New System.Drawing.Point(559, 12)
+        Me.lblVersion.Name = "lblVersion"
+        Me.lblVersion.Size = New System.Drawing.Size(113, 13)
+        Me.lblVersion.TabIndex = 16
+        Me.lblVersion.Text = "Versione 1.0.0.0"
+        Me.lblVersion.TextAlign = System.Drawing.ContentAlignment.TopRight
+        '
         'SET_MainForm
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.SystemColors.Control
-        Me.ClientSize = New System.Drawing.Size(684, 231)
+        Me.ClientSize = New System.Drawing.Size(684, 255)
         Me.Controls.Add(Me.btnExportSTP)
+        Me.Controls.Add(Me.lblVersion)
         Me.Controls.Add(Me.txtScale)
         Me.Controls.Add(Me.Label2)
         Me.Controls.Add(Me.btnExportJPG)
@@ -354,8 +367,8 @@ Partial Class SET_MainForm
         Me.Controls.Add(Me.btnGenerateBOMSupplier)
         Me.Controls.Add(Me.btnPropTable)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
-        Me.MaximumSize = New System.Drawing.Size(700, 270)
-        Me.MinimumSize = New System.Drawing.Size(700, 270)
+        Me.MaximumSize = New System.Drawing.Size(700, 294)
+        Me.MinimumSize = New System.Drawing.Size(700, 294)
         Me.Name = "SET_MainForm"
         Me.Text = "SolidEdgeTools"
         Me.ResumeLayout(False)
@@ -393,4 +406,5 @@ Partial Class SET_MainForm
     Friend WithEvents btnCodificaProgetto As Button
     Friend WithEvents btnExportSTP As Button
     Friend WithEvents btnConvertDisegniDiPiegaToDWG As Button
+    Friend WithEvents lblVersion As Label
 End Class

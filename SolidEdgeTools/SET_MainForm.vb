@@ -1005,6 +1005,8 @@ Public Class SET_MainForm
         Else
             Material.Enabled = False
         End If
+
+        lblVersion.Text = String.Format("Versione {0}", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString())
     End Sub
 
     Private Sub bntPropBOM_Click(sender As Object, e As EventArgs) Handles bntPropBOM.Click
