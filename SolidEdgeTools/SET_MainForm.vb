@@ -37,10 +37,6 @@ Public Class SET_MainForm
                     ' Create an instance of each document environment
                     Dim sDocument As String = ofdSelectPSMFile.FileName
 
-                    Prefisso.Text = ofdSelectPSMFile.FileName
-
-
-
                     objPropSets.Open(sDocument, True)
 
                     xlsArray.SetValue("Classe", index, 0)
@@ -91,7 +87,11 @@ Public Class SET_MainForm
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                sfdSelectXLSFile.FileName = "Lista_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
+                If PropBom Then
+                    sfdSelectXLSFile.FileName = "Lista_Proprietà_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
+                Else
+                    sfdSelectXLSFile.FileName = "Lista_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
+                End If
                 If sfdSelectXLSFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
                     _workflowService.ExecuteWithAssembly(
                         ofdSelectASMFile.FileName,

@@ -135,7 +135,7 @@ Partial Class SET_MainForm
         Me.btnGenerateBOMSupplier.Name = "btnGenerateBOMSupplier"
         Me.btnGenerateBOMSupplier.Size = New System.Drawing.Size(125, 25)
         Me.btnGenerateBOMSupplier.TabIndex = 0
-        Me.btnGenerateBOMSupplier.Text = "BOM Fornitore Lamiere"
+        Me.btnGenerateBOMSupplier.Text = "BOM Fornitore"
         Me.btnGenerateBOMSupplier.UseVisualStyleBackColor = True
         '
         'btnConvertDisegniDiPiegaToPdf
