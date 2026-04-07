@@ -124,6 +124,14 @@
     <Import Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Interop\SolidEdgeSessionHelpers.vb" />
+    <Compile Include="Models\BOMItem.vb" />
+    <Compile Include="Services\FilePropertyService.vb" />
+    <Compile Include="Services\BomService.vb" />
+    <Compile Include="Services\DraftGenerationService.vb" />
+    <Compile Include="Services\FlatDxfExportService.vb" />
+    <Compile Include="Services\MaterialFilter.vb" />
+    <Compile Include="Services\NeutralExportService.vb" />
     <Compile Include="SET_MainForm.vb">
       <SubType>Form</SubType>
     </Compile>

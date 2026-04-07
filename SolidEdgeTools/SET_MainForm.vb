@@ -7,33 +7,6 @@ Public Class SET_MainForm
 
 #Region "====[ Generate BOM ]===="
 
-    Public Class BOMItem
-        Public Name As String
-        Public LastSaveDate As String
-        Public RevisionNumber As String
-        Public Thickness As String
-        Public BendRadius As String
-        Public NeutralFactor As String
-        Public Material As String
-        Public Count As Integer
-        Public Items As New List(Of BOMItem)
-    End Class
-
-
-
-    Public Class BOMAssembly : Inherits BOMItem
-        Public Sub IncCount()
-            'For Each item As BOMItem In Items
-            '    If TypeOf item Is BOMAssembly Then
-            '        CType(item, BOMAssembly).IncCount()
-            '    Else
-            '        item.Count += (item.Count / Count)
-            '    End If
-            'Next
-            Count += 1
-        End Sub
-    End Class
-
     Private Sub btnPropTable_Click(sender As System.Object, e As System.EventArgs) Handles btnPropTable.Click
 
         Dim objApp As SolidEdgeFramework.Application = Nothing
@@ -120,22 +93,13 @@ Public Class SET_MainForm
         BOM_Generate(False)
     End Sub
 
-    Private m_BOMAssemblies As New Dictionary(Of String, BOMAssembly)
-
     Private Sub BOM_Generate(PropBom As Boolean)
         Dim objApp As SolidEdgeFramework.Application = Nothing
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim component As SolidEdgeAssembly.Occurrence = Nothing
-        Dim tree As SolidEdgeAssembly.Occurrences = Nothing
-        Dim objsubass As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim subcomponent As SolidEdgeAssembly.Occurrence = Nothing
-        Dim subtree As SolidEdgeAssembly.Occurrences = Nothing
-
-        Dim asmfile(50) As String
-        Dim bomAssembly As BOMItem
+        Dim bomService As New BomService(AddressOf PsmGetProperty)
+        Dim bomAssembly As BOMAssembly
         Dim xlsArray As Array
-        'Dim i, j As Integer
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
@@ -155,14 +119,12 @@ Public Class SET_MainForm
                     ' Create an instance of each document environment
                     objAssembly = objDocuments.Open(ofdSelectASMFile.FileName)
 
-                    m_BOMAssemblies.Clear()
-                    bomAssembly = BOM_AddAssembly(Nothing, objAssembly.FullName)
-                    BOM(objDocuments, bomAssembly, objAssembly.Occurrences)
+                    bomAssembly = bomService.Build(objAssembly.FullName, objAssembly.Occurrences)
 
                     If PropBom Then
-                        xlsArray = BOM_ToProperty(bomAssembly)
+                        xlsArray = bomService.ToPropertyArray(bomAssembly, AddressOf CheckMaterial)
                     Else
-                        xlsArray = BOM_ToSupplierArray(bomAssembly)
+                        xlsArray = bomService.ToSupplierArray(bomAssembly, Prefisso.Text, AddressOf CheckMaterial)
                     End If
 
                     WriteSpreadsheetFromArray(xlsArray, sfdSelectXLSFile.FileName)
@@ -178,126 +140,10 @@ Public Class SET_MainForm
         End Try
 
     End Sub
-
-    Private Function BOM_AddAssembly(parentAssembly As BOMAssembly, name As String) As BOMAssembly
-
-        Dim bomAssembly As New BOMAssembly() With
-            {
-                .Name = name,
-                .Count = 1
-            }
-        m_BOMAssemblies.Add(name, bomAssembly)
-        If Not parentAssembly Is Nothing Then
-            parentAssembly.Items.Add(bomAssembly)
-        End If
-        Return (bomAssembly)
-    End Function
-
-    Private Function BOM_AddItem(parentAssembly As BOMAssembly, name As String) As BOMItem
-
-        Dim productLastSaveDate As String
-        Dim productRevisionNumber As String
-        Dim productBendRadius As String
-        Dim productNeutralFactor As String
-        Dim productMaterial As String
-        Dim productThickness As String
-
-        Try
-            productLastSaveDate = PsmGetProperty(name, "SummaryInformation", "Last Save Date")
-        Catch ex As Exception
-            productLastSaveDate = ""
-        End Try
-
-        Try
-            productRevisionNumber = PsmGetProperty(name, "SummaryInformation", "Revision Number")
-        Catch ex As Exception
-            productRevisionNumber = ""
-        End Try
-
-        Try
-            productMaterial = PsmGetProperty(name, "MechanicalModeling", "Material")
-        Catch ex As Exception
-            productMaterial = ""
-        End Try
-
-        Try
-            productThickness = PsmGetProperty(name, "Custom", "Material Thickness")
-        Catch ex As Exception
-            productThickness = ""
-        End Try
-
-        Try
-            productBendRadius = PsmGetProperty(name, "Custom", "Bend Radius")
-        Catch ex As Exception
-            productBendRadius = ""
-        End Try
-
-        Try
-            productNeutralFactor = PsmGetProperty(name, "Custom", "Neutral Factor")
-        Catch ex As Exception
-            productNeutralFactor = ""
-        End Try
-
-        Dim bomItem As New BOMItem() With
-            {
-                .Name = name,
-                .Count = 1,
-                .LastSaveDate = productLastSaveDate,
-                .RevisionNumber = productRevisionNumber,
-                .Material = productMaterial,
-                .Thickness = productThickness,
-                .BendRadius = productBendRadius,
-                .NeutralFactor = productNeutralFactor
-            }
-
-        parentAssembly.Items.Add(bomItem)
-
-        Return bomItem
-    End Function
-
     Private Function PsmGetProperty(path As String, _
                                     propertySetName As String, _
                                     propertyName As String)
-
-        Dim objPropertySets As SolidEdgeFileProperties.PropertySets = Nothing
-        Dim objProperties As SolidEdgeFileProperties.Properties = Nothing
-        Dim objProperty As SolidEdgeFileProperties.Property = Nothing
-
-        Try
-
-            objPropertySets = New SolidEdgeFileProperties.PropertySets
-            objPropertySets.Open(path, True)
-
-            For Each objProperties In objPropertySets
-
-
-                If objProperties.Name = propertySetName Then
-                    For Each objProperty In objProperties
-
-                        If objProperty.Name = propertyName Then
-                            Return Convert.ToString(objProperty.Value)
-                        End If
-                    Next
-                End If
-            Next
-        Catch
-        Finally
-            If Not objProperty Is Nothing Then
-                Marshal.ReleaseComObject(objProperty)
-                objProperty = Nothing
-            End If
-            If Not objProperties Is Nothing Then
-                Marshal.ReleaseComObject(objProperties)
-                objProperties = Nothing
-            End If
-            If Not objPropertySets Is Nothing Then
-                objPropertySets.Close()
-                Marshal.ReleaseComObject(objPropertySets)
-                objPropertySets = Nothing
-            End If
-        End Try
-
-        Return Nothing
+        Return FilePropertyService.GetPropertyValue(path, propertySetName, propertyName)
     End Function
 
     'Private Sub BOM_ToI24Array_AddArray(values As Array, ByRef index As Integer, ByVal level As String, item As BOMItem)
@@ -339,35 +185,6 @@ Public Class SET_MainForm
 
     'End Function
 
-    Private Sub BOM_ToSupplierArray_ElabItem(flatBoms As Dictionary(Of String, BOMItem),
-        item As BOMItem)
-
-        If TypeOf item Is BOMAssembly Then
-            For Each subItem As BOMItem In item.Items
-                BOM_ToSupplierArray_ElabItem(flatBoms, subItem)
-            Next
-        ElseIf TypeOf item Is BOMItem Then
-            If flatBoms.ContainsKey(item.Name) Then
-                flatBoms(item.Name).Count += item.Count
-            Else
-                flatBoms.Add(item.Name, New BOMItem() With {.Name = item.Name, .Thickness = item.Thickness, .Material = item.Material, .LastSaveDate = item.LastSaveDate, .RevisionNumber = item.RevisionNumber, .Count = item.Count, .BendRadius = item.BendRadius, .NeutralFactor = item.NeutralFactor})
-            End If
-        End If
-    End Sub
-
-    Private Sub BOMUpdateCount(item As BOMItem, count As Integer)
-
-        If TypeOf item Is BOMAssembly Then
-
-            For Each subItem As BOMItem In item.Items
-                BOMUpdateCount(subItem, count * item.Count)
-            Next
-        ElseIf TypeOf item Is BOMItem Then
-            item.Count *= count
-        End If
-
-    End Sub
-
     Private Sub BOMPrint(item As BOMItem, level As Integer)
 
         If TypeOf item Is BOMAssembly Then
@@ -382,187 +199,16 @@ Public Class SET_MainForm
 
     End Sub
 
-    Private Function BOM_ToSupplierArray(bomAssembly As BOMAssembly)
-
-        Dim count As Integer = 0
-        Dim index As Integer = 0
-
-        Dim flatBoms As New Dictionary(Of String, BOMItem)
-
-        BOMUpdateCount(bomAssembly, bomAssembly.Count)
-        BOM_ToSupplierArray_ElabItem(flatBoms, bomAssembly)
-
-        Dim values(flatBoms.Count, 4) As String
-        'testata
-        values.SetValue("Nome File", index, 0)
-        values.SetValue("Spessore", index, 1)
-        values.SetValue("Materiale", index, 2)
-        values.SetValue("Quantità", index, 3)
-        index += 1
-        For Each item As BOMItem In flatBoms.Values
-            If CheckMaterial(item.Material) Then
-                values.SetValue(Prefisso.Text + Path.GetFileNameWithoutExtension(item.Name), index, 0)
-                values.SetValue(IIf(item.Thickness Is Nothing, "", item.Thickness), index, 1)
-                values.SetValue(IIf(item.Material Is Nothing, "", item.Material), index, 2)
-                values.SetValue(item.Count.ToString(), index, 3)
-                index += 1
-            End If
-        Next
-
-        Return values
-
-    End Function
-
-    Private Function BOM_ToProperty(bomAssembly As BOMAssembly)
-
-        Dim count As Integer = 0
-        Dim index As Integer = 0
-
-        Dim flatBoms As New Dictionary(Of String, BOMItem)
-
-        BOMUpdateCount(bomAssembly, bomAssembly.Count)
-        BOM_ToSupplierArray_ElabItem(flatBoms, bomAssembly)
-
-        Dim values(flatBoms.Count, 8) As String
-        'testata
-        values.SetValue("Nome File", index, 0)
-        values.SetValue("Spessore", index, 1)
-        values.SetValue("Materiale", index, 2)
-        values.SetValue("Quantità", index, 3)
-        values.SetValue("Raggio di piega", index, 4)
-        values.SetValue("Fattore Neutro", index, 5)
-        values.SetValue("Revisione", index, 6)
-        values.SetValue("Ultimo Salvataggio", index, 7)
-        index += 1
-        For Each item As BOMItem In flatBoms.Values
-            If CheckMaterial(item.Material) Then
-                values.SetValue(Path.GetFileNameWithoutExtension(item.Name), index, 0)
-                values.SetValue(IIf(item.Thickness Is Nothing, "", item.Thickness), index, 1)
-                values.SetValue(IIf(item.Material Is Nothing, "", item.Material), index, 2)
-                values.SetValue(item.Count.ToString(), index, 3)
-                values.SetValue(IIf(item.BendRadius Is Nothing, "", item.BendRadius), index, 4)
-                values.SetValue(IIf(item.NeutralFactor Is Nothing, "", item.NeutralFactor), index, 5)
-                values.SetValue(IIf(item.RevisionNumber Is Nothing, "", item.RevisionNumber), index, 6)
-                values.SetValue(IIf(item.LastSaveDate Is Nothing, "", item.LastSaveDate), index, 7)
-                index += 1
-            End If
-        Next
-
-        Return values
-
-    End Function
     Public Function CheckMaterial(item_material As String) As Boolean
-
-        Dim found As Boolean = False
-
-        'aggiungere la verifica di uno (o più) materiali scelti
+        Dim selectedMaterials As New List(Of String)
 
         For Each item In Material.CheckedItems
-            If item_material.Contains(item.ToString) Then
-                found = True
-            End If
+            selectedMaterials.Add(item.ToString())
         Next
 
-        Return found
+        Return MaterialFilter.MatchesSelectedMaterial(item_material, selectedMaterials)
 
     End Function
-    Public Sub BOM(objDocuments As SolidEdgeFramework.Documents,
-        ByVal parentAssembly As BOMItem,
-        ByVal Occurrences As SolidEdgeAssembly.Occurrences)
-
-        Dim elementIndex As Integer = 1
-
-        For Each Item As SolidEdgeAssembly.Occurrence In Occurrences
-
-
-            If Item.Type = SolidEdgeFramework.ObjectType.igSubAssembly Then
-
-                Dim foundAssembly As BOMAssembly = Nothing
-
-                If m_BOMAssemblies.TryGetValue(Item.OccurrenceFileName, foundAssembly) Then
-                    foundAssembly.IncCount()
-                Else
-                    foundAssembly = BOM_AddAssembly(parentAssembly, Item.OccurrenceFileName)
-                    elementIndex += 1
-
-                    BOM(objDocuments, foundAssembly, Item.OccurrenceDocument.Occurrences)
-                End If
-            Else
-
-                Dim foundItem As BOMItem = FindItemByName(parentAssembly.Items, Item.OccurrenceFileName)
-
-                If Not foundItem Is Nothing Then
-                    foundItem.Count += 1
-                Else
-                    'Dim productDescription As String
-
-                    'If Path.GetExtension(Item.OccurrenceFileName) = ".psm" Then
-
-                    '    Dim objPSMDocument As SolidEdgePart.SheetMetalDocument = Nothing
-                    '    Dim objMatTable As SolidEdgeFramework.MatTable = Nothing
-
-
-                    '    Try
-                    '        Dim materialCount As Integer
-                    '        Dim materials As Object
-                    '        Dim materialName As String
-
-                    '        materialCount = 0
-                    '        materials = Nothing
-                    '        materialName = "D:\Temp\prova.xml"
-
-                    '        objMatTable = objDocuments.Application.GetMaterialTable()
-
-                    '        objPSMDocument = objDocuments.Open(Item.OccurrenceFileName)
-
-                    '        objMatTable.SetActiveDocument(objPSMDocument)
-                    '        objMatTable.WriteMaterialDataToXML(materialName)
-                    '        objPSMDocument.
-                    '        objPSMDocument.Close()
-
-                    '    Finally
-                    '        If Not objPSMDocument Is Nothing Then
-                    '            objPSMDocument.Close()
-                    '        End If
-                    '        ReleaseCOMReference(objPSMDocument)
-                    '        ReleaseCOMReference(objMatTable)
-                    '    End Try
-
-                    'End If
-
-                    'Try
-                    '    productDescription = PsmGetProperty(Name, "SummaryInformation", "Title")
-                    'Catch ex As Exception
-                    '    productDescription = ""
-                    'End Try
-
-                    'Dim bomItem As New BOMItem() With
-                    '    {
-                    '        .Name = Name,
-                    '        .Count = 1,
-                    '        .Description = productDescription
-                    '    }
-
-                    'parentAssembly.Items.Add(bomItem)
-
-                    BOM_AddItem(parentAssembly, Item.OccurrenceFileName)
-                    elementIndex += 1
-                End If
-
-            End If
-        Next Item
-
-    End Sub
-
-    Private Function FindItemByName(items As List(Of BOMItem), name As String) As BOMItem
-        For Each item As BOMItem In items
-            If TypeOf item Is BOMItem AndAlso item.Name = name Then
-                Return item
-            End If
-        Next
-        Return Nothing
-    End Function
-
     Sub GetFileProps(filename As String, i As Integer)
         'Dim objPropSets As SolidEdgeFramework.PropertySets
         'Dim objProps As SolidEdgeFramework.Properties
@@ -680,35 +326,16 @@ Public Class SET_MainForm
 #Region "====[ Solid Edge Functions ]===="
 
     Private Function SE_OpenApplication(makeVisible As Boolean) As SolidEdgeFramework.Application
-
-        Dim seApplication As SolidEdgeFramework.Application = Nothing
-        ' Register with OLE to handle concurrency issues on the current thread.
-        SolidEdgeCommunity.OleMessageFilter.Register()
-        ' Connect to or start Solid Edge.
-        seApplication = SolidEdgeCommunity.SolidEdgeUtils.Connect(True, True)
-        seApplication.Visible = makeVisible
-
-        Return seApplication
+        Return SolidEdgeSessionHelpers.OpenApplication(makeVisible)
 
     End Function
 
     Private Sub SE_CloseApplication(ByRef seApplication As SolidEdgeFramework.Application, quit As Boolean)
-        If seApplication Is Nothing Then
-            Return
-        End If
-
-        If quit Then
-            seApplication.Quit()
-        End If
-
-        SolidEdgeCommunity.OleMessageFilter.Unregister()
+        SolidEdgeSessionHelpers.CloseApplication(seApplication, quit)
     End Sub
 
     Private Sub ReleaseCOMReference(ByRef comObject As Object)
-        If Not comObject Is Nothing Then
-            Marshal.ReleaseComObject(comObject)
-            comObject = Nothing
-        End If
+        SolidEdgeSessionHelpers.ReleaseCOMReference(comObject)
     End Sub
 
     Private Sub ExportPartDocument(ByVal seApplication As SolidEdgeFramework.Application,
@@ -958,7 +585,9 @@ Public Class SET_MainForm
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim psmFiles As New Dictionary(Of String, Integer)
+        Dim draftService As New DraftGenerationService(AddressOf CheckMaterial,
+                                                       AddressOf DisegniDiPiega_ExportDFT,
+                                                       AddressOf DisplayException)
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
@@ -969,7 +598,7 @@ Public Class SET_MainForm
             ' Load file asm
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If DisegniDiPiega_ScanNode(seApplication, psmFiles, seAssembly, seAssembly.Occurrences) = False Then
+            If draftService.GenerateForAssembly(seApplication, seAssembly, Prefisso.Text) = False Then
                 Return False
             End If
 
@@ -978,96 +607,6 @@ Public Class SET_MainForm
             ReleaseCOMReference(seAssembly)
             SE_CloseApplication(seApplication, True)
         End Try
-
-        Return True
-
-    End Function
-
-    Public Function DisegniDiPiega_ScanNode(ByVal seApplication As SolidEdgeFramework.Application,
-                                ByVal psmFiles As Dictionary(Of String, Integer),
-                                objRootAssembly As SolidEdgeAssembly.AssemblyDocument,
-                                ByVal occurrences As SolidEdgeAssembly.Occurrences) As Boolean
-
-        For Each item As SolidEdgeAssembly.Occurrence In occurrences
-
-            Select Case item.Type
-                Case SolidEdgeFramework.ObjectType.igSubAssembly
-                    DisegniDiPiega_ScanNode(seApplication, psmFiles, objRootAssembly, item.OccurrenceDocument.Occurrences)
-
-                Case SolidEdgeFramework.ObjectType.igPart
-
-                    If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-                        If CheckMaterial(PsmGetProperty(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-
-                            If Not psmFiles.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        DisegniDiPiega_ExportDFT(seApplication,
-                                       Path.Combine(objRootAssembly.Path,
-                                        "Disegni di Piega", Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), "dft")),
-                                        item.OccurrenceFileName)
-
-                                        psmFiles.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante la generazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-
-                                Loop
-
-                            End If
-
-                        End If
-                    End If
-
-                    If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-                        If CheckMaterial(PsmGetProperty(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-
-                            If Not psmFiles.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        DisegniDiPiega_ExportDFT(seApplication,
-                                       Path.Combine(objRootAssembly.Path,
-                                        "Viste 3D", Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), "dft")),
-                                        item.OccurrenceFileName)
-
-                                        psmFiles.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante la generazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-
-                                Loop
-
-                            End If
-
-                        End If
-                    End If
-
-
-            End Select
-
-        Next
 
         Return True
 
@@ -1347,7 +886,10 @@ Public Class SET_MainForm
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim occurrenceFileNames As New Dictionary(Of String, Integer)
+        Dim exportService As New NeutralExportService(AddressOf CheckMaterial,
+                                                      AddressOf ExportPartDocument,
+                                                      AddressOf ExportSheetMetalDocumentDocument,
+                                                      AddressOf DisplayException)
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
@@ -1358,7 +900,7 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If Export_ScanNode(seApplication, occurrenceFileNames, seAssembly, seAssembly.Occurrences, type) = False Then
+            If exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, type) = False Then
                 Return False
             End If
 
@@ -1369,90 +911,6 @@ Public Class SET_MainForm
         End Try
 
         Return True
-    End Function
-
-    Public Function Export_ScanNode(ByVal seApplication As SolidEdgeFramework.Application,
-                                ByVal occurrenceFileNames As Dictionary(Of String, Integer),
-                                objRootAssembly As SolidEdgeAssembly.AssemblyDocument,
-                                ByVal occurrences As SolidEdgeAssembly.Occurrences, type As String) As Boolean
-
-        For Each item As SolidEdgeAssembly.Occurrence In occurrences
-
-            Select Case item.Type
-                Case SolidEdgeFramework.ObjectType.igSubAssembly
-                    Export_ScanNode(seApplication, occurrenceFileNames, objRootAssembly, item.OccurrenceDocument.Occurrences, type)
-
-                Case SolidEdgeFramework.ObjectType.igPart
-
-                    If CheckMaterial(PsmGetProperty(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-
-                        If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-
-                            If Not occurrenceFileNames.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        ExportPartDocument(seApplication,
-                                           item.OccurrenceFileName,
-                                           Path.Combine(objRootAssembly.Path,
-                                            type, Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), type)))
-                                        occurrenceFileNames.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante l'esportazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-                                Loop
-
-                            End If
-
-                        ElseIf Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-
-                            If Not occurrenceFileNames.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        ExportSheetMetalDocumentDocument(seApplication,
-                                                      item.OccurrenceFileName,
-                                                      Path.Combine(objRootAssembly.Path,
-                                                       type, Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), type)))
-
-                                        occurrenceFileNames.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante l'esportazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-                                Loop
-
-                            End If
-
-                        End If
-                    End If
-
-
-            End Select
-
-        Next
-
-        Return True
-
     End Function
 
     Private Sub btnExportSTL_Click(sender As System.Object, e As System.EventArgs) Handles btnExportSTL.Click
@@ -1490,7 +948,9 @@ Public Class SET_MainForm
         Dim seApplication As SolidEdgeFramework.Application = Nothing
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim seAssembly As SolidEdgeAssembly.AssemblyDocument = Nothing
-        Dim occurrenceFileNames As New Dictionary(Of String, Integer)
+        Dim exportService As New FlatDxfExportService(AddressOf CheckMaterial,
+                                                      AddressOf ExportSheetMetalDocumentToDxf,
+                                                      AddressOf DisplayException)
 
         Try
             seApplication = SE_OpenApplication(se_off.CheckState)
@@ -1501,7 +961,7 @@ Public Class SET_MainForm
             ' Load asm file
             seAssembly = seDocuments.Open(asmFilePath)
 
-            If Not ExportDXF_ScanNode(seApplication, occurrenceFileNames, seAssembly, seAssembly.Occurrences) Then
+            If Not exportService.ExportAssembly(seApplication, seAssembly, Prefisso.Text, all_subasm.Checked) Then
                 Return False
             End If
 
@@ -1510,66 +970,6 @@ Public Class SET_MainForm
             ReleaseCOMReference(seDocuments)
             ReleaseCOMReference(seAssembly)
         End Try
-
-        Return True
-
-    End Function
-
-    Public Function ExportDXF_ScanNode(ByVal seApplication As SolidEdgeFramework.Application,
-                                ByVal occurrenceFileNames As Dictionary(Of String, Integer),
-                                objRootAssembly As SolidEdgeAssembly.AssemblyDocument,
-                                ByVal occurrences As SolidEdgeAssembly.Occurrences) As Boolean
-
-        For Each item As SolidEdgeAssembly.Occurrence In occurrences
-
-            Select Case item.Type
-                Case SolidEdgeFramework.ObjectType.igSubAssembly
-
-                    If all_subasm.Checked = True Then
-                        ExportDXF_ScanNode(seApplication, occurrenceFileNames, objRootAssembly, item.OccurrenceDocument.Occurrences)
-                    End If
-
-
-                Case SolidEdgeFramework.ObjectType.igPart
-
-                    If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-
-                        If CheckMaterial(PsmGetProperty(item.OccurrenceFileName, "MechanicalModeling", "Material")) Then
-
-                            If Not occurrenceFileNames.ContainsKey(item.OccurrenceFileName) Then
-
-                                Do While True
-                                    Try
-                                        ExportSheetMetalDocumentToDxf(seApplication,
-                                       item.OccurrenceFileName,
-                                       Path.Combine(objRootAssembly.Path,
-                                        "dxf", Prefisso.Text & Path.ChangeExtension(Path.GetFileName(item.OccurrenceFileName), "dxf")))
-
-                                        occurrenceFileNames.Add(item.OccurrenceFileName, 0)
-                                        Exit Do
-
-                                    Catch ex As Exception
-
-                                        Select Case DisplayException(ex, String.Format("Errore durante l'esportazione {0}.", item.OccurrenceFileName), MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Error)
-                                            Case Windows.Forms.DialogResult.Ignore
-                                                Exit Do
-
-                                            Case Windows.Forms.DialogResult.Abort
-                                                Return False
-
-                                        End Select
-                                    End Try
-
-                                Loop
-
-                            End If
-                        End If
-
-                    End If
-
-            End Select
-
-        Next
 
         Return True
 
@@ -1800,7 +1200,7 @@ Public Class SET_MainForm
                 Case SolidEdgeFramework.ObjectType.igSubAssembly
 
                     If all_subasm.Checked = True Then
-                        ExportDXF_ScanNode(seApplication, occurrenceFileNames, objRootAssembly, item.OccurrenceDocument.Occurrences)
+                        ExportJPG_ScanNode(seApplication, occurrenceFileNames, objRootAssembly, item.OccurrenceDocument.Occurrences)
                     End If
 
 
