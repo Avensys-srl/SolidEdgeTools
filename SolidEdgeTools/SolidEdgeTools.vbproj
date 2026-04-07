@@ -126,17 +126,23 @@
   <ItemGroup>
     <Compile Include="Interop\SolidEdgeSessionHelpers.vb" />
     <Compile Include="Models\BOMItem.vb" />
+    <Compile Include="Models\GeometryModels.vb" />
+    <Compile Include="Models\ProductConfiguration.vb" />
     <Compile Include="Models\WorkflowOptions.vb" />
     <Compile Include="Services\FilePropertyService.vb" />
     <Compile Include="Services\BomService.vb" />
+    <Compile Include="Services\ConfigurationEngine.vb" />
+    <Compile Include="Services\ConfigurationValidator.vb" />
     <Compile Include="Services\DraftGenerationService.vb" />
     <Compile Include="Services\DraftPublishService.vb" />
     <Compile Include="Services\FlatDxfExportService.vb" />
+    <Compile Include="Services\GeometryPlanService.vb" />
     <Compile Include="Services\ImageExportService.vb" />
     <Compile Include="Services\MaterialFilter.vb" />
     <Compile Include="Services\NeutralExportService.vb" />
     <Compile Include="Services\OccurrenceWalker.vb" />
     <Compile Include="Services\SolidEdgeWorkflowService.vb" />
+    <Compile Include="Services\TemplateGeometryService.vb" />
     <Compile Include="SET_MainForm.vb">
       <SubType>Form</SubType>
     </Compile>

@@ -4,6 +4,7 @@ Imports System.IO
 
 Public Class SET_MainForm
 
+    Private ReadOnly _configurationEngine As New ConfigurationEngine()
     Private ReadOnly _workflowService As New SolidEdgeWorkflowService()
 
 
@@ -1117,58 +1118,31 @@ Public Class SET_MainForm
     End Sub
 
     Private Function GetApplicationOptions() As SolidEdgeApplicationOptions
-        Return New SolidEdgeApplicationOptions() With {
-            .MakeVisible = se_off.CheckState
-        }
+        Return _configurationEngine.CreateApplicationOptions(GetProductConfiguration())
     End Function
 
     Private Function GetMaterialSelectionOptions() As MaterialSelectionOptions
-        Dim options As New MaterialSelectionOptions()
-
-        For Each item In Material.CheckedItems
-            options.SelectedMaterials.Add(item.ToString())
-        Next
-
-        Return options
+        Return _configurationEngine.CreateMaterialSelectionOptions(GetProductConfiguration())
     End Function
 
     Private Function GetBomExportOptions() As BomExportOptions
-        Return New BomExportOptions() With {
-            .Prefix = Prefisso.Text,
-            .MaterialSelection = GetMaterialSelectionOptions()
-        }
+        Return _configurationEngine.CreateBomExportOptions(GetProductConfiguration())
     End Function
 
     Private Function GetNeutralExportOptions(exportType As String) As NeutralExportOptions
-        Return New NeutralExportOptions() With {
-            .Prefix = Prefisso.Text,
-            .ExportType = exportType,
-            .MaterialSelection = GetMaterialSelectionOptions()
-        }
+        Return _configurationEngine.CreateNeutralExportOptions(GetProductConfiguration(), exportType)
     End Function
 
     Private Function GetFlatDxfExportOptions() As FlatDxfExportOptions
-        Return New FlatDxfExportOptions() With {
-            .Prefix = Prefisso.Text,
-            .IncludeSubAssemblies = all_subasm.Checked,
-            .MaterialSelection = GetMaterialSelectionOptions()
-        }
+        Return _configurationEngine.CreateFlatDxfExportOptions(GetProductConfiguration())
     End Function
 
     Private Function GetImageExportOptions() As ImageExportOptions
-        Return New ImageExportOptions() With {
-            .Prefix = Prefisso.Text,
-            .IncludeSubAssemblies = all_subasm.Checked,
-            .MaterialSelection = GetMaterialSelectionOptions()
-        }
+        Return _configurationEngine.CreateImageExportOptions(GetProductConfiguration())
     End Function
 
     Private Function GetDraftGenerationOptions() As DraftGenerationOptions
-        Return New DraftGenerationOptions() With {
-            .Prefix = Prefisso.Text,
-            .Scale = CDbl(txtScale.Text),
-            .MaterialSelection = GetMaterialSelectionOptions()
-        }
+        Return _configurationEngine.CreateDraftGenerationOptions(GetProductConfiguration())
     End Function
 
     Private Function GetDraftPublishOptions(inputDirectory As String) As DraftPublishOptions
@@ -1178,11 +1152,25 @@ Public Class SET_MainForm
     End Function
 
     Private Function GetProjectCodingOptions() As ProjectCodingOptions
-        Return New ProjectCodingOptions() With {
+        Return _configurationEngine.CreateProjectCodingOptions(GetProductConfiguration())
+    End Function
+
+    Private Function GetProductConfiguration() As ProductConfiguration
+        Dim input As New ConfigurationInputModel() With {
+            .Prefix = Prefisso.Text,
+            .Scale = CDbl(txtScale.Text),
+            .IncludeSubAssemblies = all_subasm.Checked,
+            .MakeApplicationVisible = se_off.CheckState,
             .ProjectName = txtProgetto.Text,
             .Revision = txtVersione.Text,
             .DocumentNumber = txtProgressivo.Text
         }
+
+        For Each item In Material.CheckedItems
+            input.SelectedMaterials.Add(item.ToString())
+        Next
+
+        Return _configurationEngine.Build(input)
     End Function
 
 

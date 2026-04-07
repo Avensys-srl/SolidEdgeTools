@@ -100,23 +100,32 @@ Current extracted modules in the repository:
 
 - `Interop/SolidEdgeSessionHelpers.vb`
 - `Models/BOMItem.vb`
+- `Models/ProductConfiguration.vb`
+- `Models/GeometryModels.vb`
 - `Services/FilePropertyService.vb`
 - `Services/MaterialFilter.vb`
 - `Services/BomService.vb`
+- `Services/ConfigurationEngine.vb`
+- `Services/ConfigurationValidator.vb`
 - `Services/NeutralExportService.vb`
 - `Services/FlatDxfExportService.vb`
 - `Services/DraftGenerationService.vb`
 - `Services/DraftPublishService.vb`
 - `Services/ImageExportService.vb`
 - `Services/OccurrenceWalker.vb`
+- `Services/SolidEdgeWorkflowService.vb`
+- `Services/GeometryPlanService.vb`
+- `Services/TemplateGeometryService.vb`
 
 Current practical state:
 
 - UI still starts from `SET_MainForm`
 - major export and BOM workflows are already delegated to services
 - recursive assembly traversal has been centralized for most workflows
-- geometry-generation capability is still not implemented
-- direct control reads from the form are still present and should be replaced later with request/config objects
+- workflow orchestration is partially centralized in a reusable workflow service
+- a first product/configuration model now exists and the form maps UI state into it
+- first validation and template-geometry scaffolding now exists, but is not yet driving production CAD generation
+- geometry-generation capability is not yet connected to real `.par` / `.psm` creation rules
 
 This means the codebase is now in an **incremental transition state**:
 
@@ -270,6 +279,8 @@ The following workflows should now be treated as service-owned logic and extende
 - DFT publish to PDF/DWG
 - image export
 - occurrence traversal
+- workflow session/document orchestration
+- configuration mapping from UI input
 
 The form should progressively become:
 
@@ -316,6 +327,7 @@ The repository already contains a first practical structure aligned with the abo
 ```text
 SET_MainForm
   -> SolidEdgeSessionHelpers
+  -> ConfigurationEngine
   -> FilePropertyService
   -> MaterialFilter
   -> BomService
@@ -325,6 +337,10 @@ SET_MainForm
   -> DraftPublishService
   -> ImageExportService
   -> OccurrenceWalker
+  -> SolidEdgeWorkflowService
+  -> ConfigurationValidator
+  -> GeometryPlanService
+  -> TemplateGeometryService
 ```
 
 This should be considered the current baseline for future refactoring.
@@ -414,18 +430,19 @@ The first extraction step is already underway and partially completed.
 
 Recommended next sequence from the current repository state:
 
-1. Introduce typed request/options classes to remove direct UI-control coupling from workflows
-2. Harden COM lifecycle management for transient COM objects inside technical export routines
-3. Consolidate Solid Edge session ownership rules so the tool does not accidentally close a user-owned session
-4. Introduce a configuration layer for product/input intent
-5. Add template-driven geometry services for `.par` / `.psm`
-6. Add assembly-composition services only after stable template and configuration patterns exist
+1. Connect `ConfigurationValidator` to explicit user-facing validation flow
+2. Evolve `UnitModel` from UI mirror into a true product model with engineering fields
+3. Make `GeometryPlanService` generate real named-variable plans for `.par` / `.psm` templates
+4. Extend `TemplateGeometryService` from template cloning to variable-driven template mutation
+5. Add assembly-composition services only after stable template and configuration patterns exist
+6. Keep export workflows isolated and unchanged while geometry/assembly capabilities are introduced
 
 Near-term priority:
 
 - stabilize architecture
 - reduce COM risk
 - preserve current production outputs
+- define stable template conventions for V20
 
 Before any major geometry automation:
 
@@ -434,6 +451,17 @@ Before any major geometry automation:
 - deterministic document lifecycle
 
 must be in place.
+
+### Current Progress vs Handoff
+
+- Step 1 `service extraction from SET_MainForm`: substantially completed for BOM and output workflows
+- Step 2 `typed request/config objects`: completed at workflow level
+- Step 3 `COM/session hardening`: completed pragmatically for current production workflows
+- Step 4 `workflow orchestration layer`: completed with `SolidEdgeWorkflowService`
+- Step 5 `configuration layer`: started and usable through `ProductConfiguration` and `ConfigurationEngine`
+- Step 6 `geometry layer`: started as template-driven scaffolding only
+- Step 7 `assembly engine`: not started
+- Step 8 `intent-driven engineering rules`: not started beyond basic configuration shaping
 
 ---
 
