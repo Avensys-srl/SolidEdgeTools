@@ -1,0 +1,39 @@
+# Visual Studio user and IDE state
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build output
+**/[Bb]in/
+**/[Oo]bj/
+Debug/
+Release/
+x64/
+x86/
+
+# Generated diagnostics and caches
+*.cache
+*.pdb
+*.ilk
+*.tlog
+*.tmp
+*.log
+
+# VB / designer temporary output
+**/Generated_Code/
+**/TempPE/
+
+# Test and local publish output
+TestResults/
+publish/
+
+# Windows / editor noise
+Thumbs.db
+Desktop.ini
+*.orig
+*.bak
+
+# Local archives
+*.rar
