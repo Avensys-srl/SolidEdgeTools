@@ -58,6 +58,7 @@ Partial Class SET_MainForm
         Me.lblProgress = New System.Windows.Forms.Label()
         Me.progressOperations = New System.Windows.Forms.ProgressBar()
         Me.btnCancelOperation = New System.Windows.Forms.Button()
+        Me.btnProduzioneLamiera = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'btnPropTable
@@ -361,12 +362,22 @@ Partial Class SET_MainForm
         Me.btnCancelOperation.Text = "Interrompi"
         Me.btnCancelOperation.UseVisualStyleBackColor = True
         '
+        'btnProduzioneLamiera
+        '
+        Me.btnProduzioneLamiera.Location = New System.Drawing.Point(303, 220)
+        Me.btnProduzioneLamiera.Name = "btnProduzioneLamiera"
+        Me.btnProduzioneLamiera.Size = New System.Drawing.Size(249, 25)
+        Me.btnProduzioneLamiera.TabIndex = 20
+        Me.btnProduzioneLamiera.Text = "Produzione Lamiera"
+        Me.btnProduzioneLamiera.UseVisualStyleBackColor = True
+        '
         'SET_MainForm
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.SystemColors.Control
         Me.ClientSize = New System.Drawing.Size(684, 289)
+        Me.Controls.Add(Me.btnProduzioneLamiera)
         Me.Controls.Add(Me.btnCancelOperation)
         Me.Controls.Add(Me.progressOperations)
         Me.Controls.Add(Me.lblProgress)
@@ -442,4 +453,5 @@ Partial Class SET_MainForm
     Friend WithEvents lblProgress As Label
     Friend WithEvents progressOperations As ProgressBar
     Friend WithEvents btnCancelOperation As Button
+    Friend WithEvents btnProduzioneLamiera As Button
 End Class

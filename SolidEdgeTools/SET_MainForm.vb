@@ -1,6 +1,7 @@
 ﻿Imports SolidEdgeCommunity.Extensions
 Imports System.Runtime.InteropServices
 Imports System.IO
+Imports System.Linq
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.Drawing.Imaging
@@ -234,7 +235,9 @@ Public Class SET_MainForm
         'End
     End Sub
 
-    Public Sub WriteSpreadsheetFromArray(strOutputArray As Array, Optional ByVal strExcelFileOutPath As String = "")
+    Public Sub WriteSpreadsheetFromArray(strOutputArray As Array,
+                                         Optional ByVal strExcelFileOutPath As String = "",
+                                         Optional ByVal showExcel As Boolean = True)
         'To avoid conflicts with different versions of Excel...We are using late binding.
         Dim objxlOutApp As Object = Nothing 'Excel.Application
         Dim objxlOutWBook As Object = Nothing 'Excel.Workbook
@@ -283,7 +286,7 @@ Public Class SET_MainForm
                 objFileInfo = Nothing
                 objxlOutWBook.SaveAs(strExcelFileOutPath)  'Then we save our file.
             End If
-            objxlOutApp.Visible = True 'Make excel visible
+            objxlOutApp.Visible = showExcel 'Make excel visible only when requested
         Catch ex As Exception
             MessageBox.Show("While trying to Export to Excel recieved error:" & ex.Message, "Export to Excel Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Try
@@ -295,6 +298,12 @@ Public Class SET_MainForm
             ReleaseCOMReference(objxlRange)
             ReleaseCOMReference(objxlOutSheet)
             ReleaseCOMReference(objxlOutWBook)
+            If Not showExcel AndAlso Not IsNothing(objxlOutApp) Then
+                Try
+                    objxlOutApp.Quit()
+                Catch
+                End Try
+            End If
             If Not IsNothing(objxlOutApp) Then
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(objxlOutApp) 'This will release the object reference
             End If
@@ -1723,6 +1732,23 @@ Public Class SET_MainForm
 
     End Sub
 
+    Private Sub btnProduzioneLamiera_Click(sender As Object, e As EventArgs) Handles btnProduzioneLamiera.Click
+        Try
+            If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+
+                If ProduzioneLamiera_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Produzione Lamiera completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ElseIf _cancelRequested Then
+                    MessageBox.Show(Me, "Produzione Lamiera interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
+            End If
+
+        Catch exception As Exception
+            DisplayException(exception)
+        End Try
+    End Sub
+
     Public Function ExportJPG_Execute(asmFilePath As String) As Boolean
         Dim exportOptions = GetImageExportOptions()
         Dim exportService As New ImageExportService(AddressOf ExportModelDocumentImage,
@@ -1735,8 +1761,121 @@ Public Class SET_MainForm
                     asmFilePath,
                     GetApplicationOptions(),
                     False,
-                    Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions, progress))
+                    Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions, progress, AddressOf IsCancellationRequested))
             End Function)
+    End Function
+
+    Private Function ProduzioneLamiera_Execute(asmFilePath As String) As Boolean
+        Dim sheetMetalMaterials = GetSheetMetalProductionMaterialSelection()
+        Dim bomOptions = BuildSheetMetalProductionBomOptions(sheetMetalMaterials)
+        Dim dxfOptions = BuildSheetMetalProductionDxfOptions(sheetMetalMaterials)
+        Dim draftOptions = BuildSheetMetalProductionDraftOptions(sheetMetalMaterials)
+        Dim bomService As New BomService(AddressOf PsmGetProperty)
+        Dim dxfService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
+                                                   AddressOf DisplayException)
+        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
+                                                       AddressOf DisplayException)
+        Dim assemblyDirectory = Path.GetDirectoryName(asmFilePath)
+        Dim supplierBomPath = Path.Combine(assemblyDirectory, "Lista_" & Path.GetFileNameWithoutExtension(asmFilePath) & ".xlsx")
+        Dim expectedTargetFiles As List(Of String) = Nothing
+        Dim expectedLabels As HashSet(Of String) = Nothing
+        Dim expectedCount As Integer = 0
+
+        BeginProgress("Produzione Lamiera - BOM")
+
+        Try
+            Dim bomBuilt = _workflowService.ExecuteWithAssembly(
+                asmFilePath,
+                GetApplicationOptions(),
+                False,
+                Function(app, assembly)
+                    expectedTargetFiles = GetSheetMetalProductionTargets(assembly, dxfOptions)
+                    expectedLabels = New HashSet(Of String)(
+                        expectedTargetFiles.Select(Function(targetPath) bomOptions.Prefix & System.IO.Path.GetFileNameWithoutExtension(targetPath)),
+                        StringComparer.OrdinalIgnoreCase)
+
+                    Dim bomAssembly = bomService.Build(assembly.FullName, assembly.Occurrences)
+                    Dim supplierArray = bomService.ToSupplierArray(bomAssembly, bomOptions)
+                    Dim filteredArray = FilterSpreadsheetArrayByFirstColumn(supplierArray, expectedLabels)
+
+                    expectedCount = CountSpreadsheetDataRows(filteredArray)
+                    WriteSpreadsheetFromArray(filteredArray, supplierBomPath, False)
+                    Return True
+                End Function)
+
+            If Not bomBuilt Then
+                Return False
+            End If
+        Finally
+            EndProgress()
+        End Try
+
+        If expectedCount = 0 Then
+            MessageBox.Show(Me, "Nessun particolare in lamiera trovato nell'assieme selezionato.", "Validazione Produzione Lamiera", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        Dim dxfExported = ExecuteWithProgress(
+            "Produzione Lamiera - DXF",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) dxfService.ExportAssembly(app, assembly, dxfOptions, progress, AddressOf IsCancellationRequested))
+            End Function)
+
+        If Not dxfExported Then
+            Return False
+        End If
+
+        Dim dxfIssues = ValidateExportedFiles(Path.Combine(assemblyDirectory, "dxf"),
+                                              expectedTargetFiles,
+                                              bomOptions.Prefix,
+                                              ".dxf",
+                                              15 * 1024)
+
+        If dxfIssues.Count > 0 Then
+            MessageBox.Show(Me,
+                            "Verifica DXF non soddisfatta:" & Environment.NewLine & String.Join(Environment.NewLine, dxfIssues),
+                            "Validazione Produzione Lamiera",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        ArchiveExistingProductionFolder(Path.Combine(assemblyDirectory, "Disegni di Piega"))
+
+        Dim dftGenerated = ExecuteWithProgress(
+            "Produzione Lamiera - DFT",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions, progress, AddressOf IsCancellationRequested))
+            End Function)
+
+        If Not dftGenerated Then
+            Return False
+        End If
+
+        Dim dftIssues = ValidateExportedFiles(Path.Combine(assemblyDirectory, "Disegni di Piega"),
+                                              expectedTargetFiles,
+                                              bomOptions.Prefix,
+                                              ".dft",
+                                              0)
+
+        If dftIssues.Count > 0 Then
+            MessageBox.Show(Me,
+                            "Verifica DFT non soddisfatta:" & Environment.NewLine & String.Join(Environment.NewLine, dftIssues),
+                            "Validazione Produzione Lamiera",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        Return True
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click
@@ -1856,6 +1995,176 @@ Public Class SET_MainForm
     Private Function GetProjectCodingOptions() As ProjectCodingOptions
         Return _configurationEngine.CreateProjectCodingOptions(GetProductConfiguration())
     End Function
+
+    Private Function GetSheetMetalProductionMaterialSelection() As MaterialSelectionOptions
+        Dim options As New MaterialSelectionOptions()
+
+        For Each item As Object In Material.Items
+            Dim materialName = item.ToString()
+
+            If materialName.IndexOf("LAMIER", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                options.SelectedMaterials.Add(materialName)
+            End If
+        Next
+
+        Return options
+    End Function
+
+    Private Function BuildSheetMetalProductionBomOptions(materialSelection As MaterialSelectionOptions) As BomExportOptions
+        Return New BomExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .MaterialSelection = materialSelection
+        }
+    End Function
+
+    Private Function BuildSheetMetalProductionDxfOptions(materialSelection As MaterialSelectionOptions) As FlatDxfExportOptions
+        Return New FlatDxfExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .IncludeSubAssemblies = all_subasm.Checked,
+            .MaterialSelection = materialSelection
+        }
+    End Function
+
+    Private Function BuildSheetMetalProductionDraftOptions(materialSelection As MaterialSelectionOptions) As DraftGenerationOptions
+        Return New DraftGenerationOptions() With {
+            .Prefix = Prefisso.Text,
+            .Scale = CDbl(txtScale.Text),
+            .MaterialSelection = materialSelection
+        }
+    End Function
+
+    Private Function GetSheetMetalProductionTargets(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                                    options As FlatDxfExportOptions) As List(Of String)
+
+        Dim walker As New OccurrenceWalker()
+        Dim targets As New List(Of String)
+        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        walker.Walk(
+            assembly.Occurrences,
+            options.IncludeSubAssemblies,
+            Function(item)
+                If item.Type <> SolidEdgeFramework.ObjectType.igPart Then
+                    Return True
+                End If
+
+                If Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant() <> ".psm" Then
+                    Return True
+                End If
+
+                If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
+                    Return True
+                End If
+
+                If uniqueFiles.Add(item.OccurrenceFileName) Then
+                    targets.Add(item.OccurrenceFileName)
+                End If
+
+                Return True
+            End Function)
+
+        Return targets
+    End Function
+
+    Private Function FilterSpreadsheetArrayByFirstColumn(sourceArray As Array,
+                                                         allowedValues As HashSet(Of String)) As Array
+
+        Dim rowIndexes As New List(Of Integer) From {0}
+        Dim columnUpperBound = sourceArray.GetUpperBound(1)
+
+        For rowIndex As Integer = 1 To sourceArray.GetUpperBound(0)
+            Dim firstColumnValue = Convert.ToString(sourceArray.GetValue(rowIndex, 0))
+
+            If allowedValues.Contains(firstColumnValue) Then
+                rowIndexes.Add(rowIndex)
+            End If
+        Next
+
+        Dim filteredArray(rowIndexes.Count - 1, columnUpperBound) As String
+
+        For targetRow As Integer = 0 To rowIndexes.Count - 1
+            Dim sourceRow = rowIndexes(targetRow)
+
+            For columnIndex As Integer = 0 To columnUpperBound
+                filteredArray(targetRow, columnIndex) = Convert.ToString(sourceArray.GetValue(sourceRow, columnIndex))
+            Next
+        Next
+
+        Return filteredArray
+    End Function
+
+    Private Function CountSpreadsheetDataRows(sourceArray As Array) As Integer
+        Dim count As Integer = 0
+
+        For rowIndex As Integer = 1 To sourceArray.GetUpperBound(0)
+            If Not String.IsNullOrWhiteSpace(Convert.ToString(sourceArray.GetValue(rowIndex, 0))) Then
+                count += 1
+            End If
+        Next
+
+        Return count
+    End Function
+
+    Private Function ValidateExportedFiles(outputDirectory As String,
+                                           expectedTargetFiles As IEnumerable(Of String),
+                                           prefix As String,
+                                           extension As String,
+                                           minFileSizeBytes As Long) As List(Of String)
+
+        Dim issues As New List(Of String)
+        Dim actualCount As Integer = 0
+        Dim targetFiles As New List(Of String)(expectedTargetFiles)
+        Dim expectedCount = targetFiles.Count
+
+        If Not Directory.Exists(outputDirectory) Then
+            issues.Add(String.Format("Cartella output mancante: {0}", outputDirectory))
+            Return issues
+        End If
+
+        For Each targetFile In targetFiles
+            Dim expectedOutputFile = Path.Combine(outputDirectory,
+                                                  prefix & Path.GetFileNameWithoutExtension(targetFile) & extension)
+
+            If Not File.Exists(expectedOutputFile) Then
+                issues.Add(String.Format("File mancante: {0}", Path.GetFileName(expectedOutputFile)))
+                Continue For
+            End If
+
+            actualCount += 1
+
+            If minFileSizeBytes > 0 Then
+                Dim fileLength = New FileInfo(expectedOutputFile).Length
+
+                If fileLength <= minFileSizeBytes Then
+                    issues.Add(String.Format("File troppo piccolo ({0} KB): {1}",
+                                             fileLength \ 1024,
+                                             Path.GetFileName(expectedOutputFile)))
+                End If
+            End If
+        Next
+
+        If actualCount <> expectedCount Then
+            issues.Insert(0, String.Format("Quantità attesa {0}, trovata {1}.", expectedCount, actualCount))
+        End If
+
+        Return issues
+    End Function
+
+    Private Sub ArchiveExistingProductionFolder(folderPath As String)
+        If Not Directory.Exists(folderPath) Then
+            Return
+        End If
+
+        Dim archivedFolderPath = folderPath & "_old"
+        Dim suffixIndex As Integer = 1
+
+        While Directory.Exists(archivedFolderPath)
+            archivedFolderPath = String.Format("{0}_old_{1:00}", folderPath, suffixIndex)
+            suffixIndex += 1
+        End While
+
+        Directory.Move(folderPath, archivedFolderPath)
+    End Sub
 
     Private Function GetProductConfiguration() As ProductConfiguration
         Dim input As New ConfigurationInputModel() With {
