@@ -1,6 +1,9 @@
 ﻿Imports SolidEdgeCommunity.Extensions
 Imports System.Runtime.InteropServices
 Imports System.IO
+Imports System.Drawing
+Imports System.Drawing.Drawing2D
+Imports System.Drawing.Imaging
 
 Public Class SET_MainForm
 
@@ -379,23 +382,34 @@ Public Class SET_MainForm
 
     End Sub
 
-    Private Sub ExportPartDocumentImage(ByVal seApplication As SolidEdgeFramework.Application,
-                        inPARFilePath As String,
+    Private Sub ExportModelDocumentImage(ByVal seApplication As SolidEdgeFramework.Application,
+                        inputFilePath As String,
                         outFilePath As String)
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim sePARDocument As SolidEdgePart.PartDocument = Nothing
-        Dim seRefPlanes As SolidEdgePart.RefPlanes = Nothing
-        Dim seRefSketchs As SolidEdgePart.Sketchs = Nothing
+        Dim seDocument As SolidEdgeFramework.SolidEdgeDocument = Nothing
+        Dim seRefPlanes As Object = Nothing
+        Dim seRefSketchs As Object = Nothing
         Dim seView As SolidEdgeFramework.View = Nothing
         Dim seWindow As SolidEdgeFramework.Window = Nothing
+        Dim viewStyle As Object = Nothing
+        Dim previousRenderMode As SolidEdgeFramework.SeRenderModeType
+        Dim previousSilhouettesEnabled As Boolean = False
+        Dim previousBackgroundType As Object = Nothing
+        Dim previousBackgroundImageDisplayed As Object = Nothing
+        Dim previousReflections As Object = Nothing
+        Dim previousFloorReflection As Object = Nothing
+        Dim previousDropShadow As Object = Nothing
+        Dim previousCastShadows As Object = Nothing
+        Dim previousTextures As Object = Nothing
+        Dim previousStyleSilhouettesEnabled As Object = Nothing
 
 
         Try
             seDocuments = seApplication.Documents
 
-            ' Apre il par file
-            sePARDocument = seDocuments.Open(inPARFilePath)
+            seDocument = DirectCast(seDocuments.Open(inputFilePath), SolidEdgeFramework.SolidEdgeDocument)
+            seDocument.Activate()
 
             If Not Directory.Exists(Path.GetDirectoryName(outFilePath)) Then
                 Directory.CreateDirectory(Path.GetDirectoryName(outFilePath))
@@ -406,38 +420,550 @@ Public Class SET_MainForm
                 File.Delete(outFilePath)
             End If
 
-
-
             seWindow = TryCast(seApplication.ActiveWindow, SolidEdgeFramework.Window)
-
-            seRefPlanes = sePARDocument.RefPlanes
-            seRefSketchs = sePARDocument.Sketches
-
-
-
-            For Each plane In seRefPlanes
-                plane.Visible = False
-            Next
-
-            For Each sketch In seRefSketchs
-                sketch.ShowSketchColors = False
-            Next
+            If seWindow Is Nothing Then
+                Throw New InvalidOperationException("Finestra Solid Edge non disponibile per export JPG.")
+            End If
 
             seView = seWindow.View
+            viewStyle = seView.ViewStyle
+            previousRenderMode = seView.RenderModeType
+            previousSilhouettesEnabled = seView.SilhouettesEnabled
 
-            seView.SaveAsImage(outFilePath)
+            If viewStyle IsNot Nothing Then
+                Try
+                    previousBackgroundType = viewStyle.BackgroundType
+                Catch
+                End Try
 
-            sePARDocument.Close()
+                Try
+                    previousBackgroundImageDisplayed = viewStyle.IsBackgroundImageDisplayed
+                Catch
+                End Try
+
+                Try
+                    previousReflections = viewStyle.Reflections
+                Catch
+                End Try
+
+                Try
+                    previousFloorReflection = viewStyle.FloorReflection
+                Catch
+                End Try
+
+                Try
+                    previousDropShadow = viewStyle.DropShadow
+                Catch
+                End Try
+
+                Try
+                    previousCastShadows = viewStyle.CastShadows
+                Catch
+                End Try
+
+                Try
+                    previousTextures = viewStyle.Textures
+                Catch
+                End Try
+
+                Try
+                    previousStyleSilhouettesEnabled = viewStyle.SilhouettesEnabled
+                Catch
+                End Try
+            End If
+
+            Try
+                seRefPlanes = CallByName(seDocument, "RefPlanes", CallType.Get)
+            Catch
+            End Try
+
+            Try
+                seRefSketchs = CallByName(seDocument, "Sketches", CallType.Get)
+            Catch
+            End Try
+
+            If seRefPlanes IsNot Nothing Then
+                For Each plane In seRefPlanes
+                    plane.Visible = False
+                Next
+            End If
+
+            If seRefSketchs IsNot Nothing Then
+                For Each sketch In seRefSketchs
+                    sketch.ShowSketchColors = False
+                Next
+            End If
+
+            ConfigureImageView(seView, viewStyle)
+            FitModelInView(seView)
+            SaveViewImageWithFallback(seView, outFilePath)
+
+            seDocument.Close()
 
         Finally
+            RestoreImageView(seView,
+                             viewStyle,
+                             previousRenderMode,
+                             previousSilhouettesEnabled,
+                             previousBackgroundType,
+                             previousBackgroundImageDisplayed,
+                             previousReflections,
+                             previousFloorReflection,
+                             previousDropShadow,
+                             previousCastShadows,
+                             previousTextures,
+                             previousStyleSilhouettesEnabled)
             ReleaseCOMReference(seView)
             ReleaseCOMReference(seWindow)
+            ReleaseCOMReference(viewStyle)
             ReleaseCOMReference(seRefPlanes)
             ReleaseCOMReference(seRefSketchs)
             ReleaseCOMReference(seDocuments)
-            ReleaseCOMReference(sePARDocument)
+            ReleaseCOMReference(seDocument)
         End Try
 
+    End Sub
+
+    Private Sub ConfigureImageView(seView As SolidEdgeFramework.View,
+                                   viewStyle As Object)
+
+        If seView Is Nothing Then
+            Return
+        End If
+
+        seView.SetRenderMode(SolidEdgeFramework.SeRenderModeType.seRenderModeOutline)
+        seView.RenderModeType = SolidEdgeFramework.SeRenderModeType.seRenderModeOutline
+        seView.SilhouettesEnabled = True
+
+        If viewStyle IsNot Nothing Then
+            Try
+                viewStyle.BeginPropertyBuffer()
+            Catch
+            End Try
+
+            Try
+                viewStyle.RenderModeType = SolidEdgeFramework.SeRenderModeType.seRenderModeOutline
+            Catch
+            End Try
+
+            Try
+                viewStyle.BackgroundType = SolidEdgeFramework.SeBackgroundType.seBackgroundTypeGradient
+            Catch
+            End Try
+
+            Try
+                viewStyle.IsBackgroundImageDisplayed = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.Reflections = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.FloorReflection = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.DropShadow = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.CastShadows = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.Textures = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.SilhouettesEnabled = True
+            Catch
+            End Try
+
+            Try
+                viewStyle.Perspective = 0
+            Catch
+            End Try
+
+            Try
+                viewStyle.SetGradientBackground(
+                    SolidEdgeFramework.SeGradientType.seGradientTypeVertical,
+                    System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.White),
+                    System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.White),
+                    System.Reflection.Missing.Value,
+                    System.Reflection.Missing.Value)
+            Catch
+            End Try
+
+            Try
+                viewStyle.FlushPropertyBuffer()
+            Catch
+            End Try
+        End If
+    End Sub
+
+    Private Sub RestoreImageView(seView As SolidEdgeFramework.View,
+                                 viewStyle As Object,
+                                 previousRenderMode As SolidEdgeFramework.SeRenderModeType,
+                                 previousSilhouettesEnabled As Boolean,
+                                 previousBackgroundType As Object,
+                                 previousBackgroundImageDisplayed As Object,
+                                 previousReflections As Object,
+                                 previousFloorReflection As Object,
+                                 previousDropShadow As Object,
+                                 previousCastShadows As Object,
+                                 previousTextures As Object,
+                                 previousStyleSilhouettesEnabled As Object)
+
+        If seView Is Nothing Then
+            Return
+        End If
+
+        Try
+            seView.RenderModeType = previousRenderMode
+        Catch
+        End Try
+
+        Try
+            seView.SilhouettesEnabled = previousSilhouettesEnabled
+        Catch
+        End Try
+
+        If viewStyle IsNot Nothing Then
+            Try
+                If previousBackgroundType IsNot Nothing Then viewStyle.BackgroundType = previousBackgroundType
+            Catch
+            End Try
+
+            Try
+                If previousBackgroundImageDisplayed IsNot Nothing Then viewStyle.IsBackgroundImageDisplayed = previousBackgroundImageDisplayed
+            Catch
+            End Try
+
+            Try
+                If previousReflections IsNot Nothing Then viewStyle.Reflections = previousReflections
+            Catch
+            End Try
+
+            Try
+                If previousFloorReflection IsNot Nothing Then viewStyle.FloorReflection = previousFloorReflection
+            Catch
+            End Try
+
+            Try
+                If previousDropShadow IsNot Nothing Then viewStyle.DropShadow = previousDropShadow
+            Catch
+            End Try
+
+            Try
+                If previousCastShadows IsNot Nothing Then viewStyle.CastShadows = previousCastShadows
+            Catch
+            End Try
+
+            Try
+                If previousTextures IsNot Nothing Then viewStyle.Textures = previousTextures
+            Catch
+            End Try
+
+            Try
+                If previousStyleSilhouettesEnabled IsNot Nothing Then viewStyle.SilhouettesEnabled = previousStyleSilhouettesEnabled
+            Catch
+            End Try
+        End If
+    End Sub
+
+    Private Sub FitModelInView(seView As SolidEdgeFramework.View)
+        If seView Is Nothing Then
+            Return
+        End If
+
+        Try
+            seView.Fit()
+        Catch
+        End Try
+
+        Try
+            seView.Update()
+        Catch
+        End Try
+
+        Try
+            seView.ZoomCamera(0.9)
+        Catch
+        End Try
+    End Sub
+
+    Private Sub SaveViewImageWithFallback(seView As SolidEdgeFramework.View,
+                                          outputJpgFilePath As String)
+
+        Dim widths() As Integer = {2048, 1600, 1280}
+        Dim heights() As Integer = {2048, 1600, 1280}
+        Dim altViewStyle As Object = System.Reflection.Missing.Value
+        Dim resolutions() As Integer = {1, 1, 1, 1}
+        Dim colorDepth As Object = 24
+        Dim imageQuality = SolidEdgeFramework.SeImageQualityType.seImageQualityHigh
+        Dim invert As Boolean = False
+        Dim lastException As Exception = Nothing
+        Dim sourceImagePath = Path.Combine(Path.GetDirectoryName(outputJpgFilePath),
+                                           Path.GetFileNameWithoutExtension(outputJpgFilePath) & "_source_tmp.jpg")
+
+        For i As Integer = 0 To widths.Length - 1
+            Try
+                seView.SaveAsImage(sourceImagePath,
+                                   widths(i),
+                                   heights(i),
+                                   altViewStyle,
+                                   resolutions(i),
+                                   colorDepth,
+                                   imageQuality,
+                                   invert)
+                NormalizePreviewImage(sourceImagePath, outputJpgFilePath)
+                Return
+            Catch ex As COMException
+                lastException = ex
+
+                If ex.HResult <> &H8007000E Then
+                    Throw
+                End If
+            Finally
+                If File.Exists(sourceImagePath) Then
+                    File.Delete(sourceImagePath)
+                End If
+            End Try
+        Next
+
+        If lastException IsNot Nothing Then
+            Throw lastException
+        End If
+    End Sub
+
+    Private Sub NormalizePreviewImage(sourceImagePath As String, outputImagePath As String)
+        Const edgeSampleWidth As Integer = 6
+        Const contentThreshold As Integer = 24
+        Const outputCanvasSize As Integer = 1200
+        Const contentFillRatio As Double = 0.92
+        Const analysisSize As Integer = 512
+        Dim tempImagePath = Path.Combine(Path.GetDirectoryName(outputImagePath),
+                                         Path.GetFileNameWithoutExtension(outputImagePath) & "_preview_tmp.jpg")
+
+        Using sourceBitmap As New Bitmap(sourceImagePath)
+            Dim analysisWidth = Math.Min(analysisSize, sourceBitmap.Width)
+            Dim analysisHeight = Math.Min(analysisSize, sourceBitmap.Height)
+            Dim cropRectangle As Rectangle
+
+            Using analysisBitmap As New Bitmap(analysisWidth, analysisHeight, PixelFormat.Format24bppRgb)
+                Using graphicsContext As System.Drawing.Graphics = System.Drawing.Graphics.FromImage(analysisBitmap)
+                    graphicsContext.Clear(Color.White)
+                    graphicsContext.InterpolationMode = InterpolationMode.HighQualityBicubic
+                    graphicsContext.DrawImage(sourceBitmap,
+                                              New Rectangle(0, 0, analysisWidth, analysisHeight),
+                                              New Rectangle(0, 0, sourceBitmap.Width, sourceBitmap.Height),
+                                              GraphicsUnit.Pixel)
+                End Using
+
+                Dim analysisBounds = FindContentBounds(analysisBitmap, contentThreshold, edgeSampleWidth)
+
+                If analysisBounds.Width <= 0 OrElse analysisBounds.Height <= 0 Then
+                    sourceBitmap.Save(tempImagePath, ImageFormat.Jpeg)
+                    ReplaceNormalizedPreviewImage(outputImagePath, tempImagePath)
+                    Return
+                End If
+
+                Dim scaleX = sourceBitmap.Width / CDbl(analysisWidth)
+                Dim scaleY = sourceBitmap.Height / CDbl(analysisHeight)
+                cropRectangle = New Rectangle(
+                    Math.Max(0, CInt(Math.Floor(analysisBounds.Left * scaleX))),
+                    Math.Max(0, CInt(Math.Floor(analysisBounds.Top * scaleY))),
+                    Math.Min(sourceBitmap.Width, CInt(Math.Ceiling(analysisBounds.Width * scaleX))),
+                    Math.Min(sourceBitmap.Height, CInt(Math.Ceiling(analysisBounds.Height * scaleY))))
+            End Using
+
+            Using croppedBitmap As New Bitmap(cropRectangle.Width, cropRectangle.Height, PixelFormat.Format24bppRgb)
+                Using cropGraphics As System.Drawing.Graphics = System.Drawing.Graphics.FromImage(croppedBitmap)
+                    cropGraphics.Clear(Color.White)
+                    cropGraphics.InterpolationMode = InterpolationMode.HighQualityBicubic
+                    cropGraphics.DrawImage(sourceBitmap,
+                                           New Rectangle(0, 0, cropRectangle.Width, cropRectangle.Height),
+                                           cropRectangle,
+                                           GraphicsUnit.Pixel)
+                End Using
+
+                NormalizePreviewBackground(croppedBitmap, contentThreshold, edgeSampleWidth)
+
+                Dim normalizedBounds = FindContentBounds(croppedBitmap, contentThreshold, edgeSampleWidth)
+                If normalizedBounds.Width <= 0 OrElse normalizedBounds.Height <= 0 Then
+                    normalizedBounds = New Rectangle(0, 0, croppedBitmap.Width, croppedBitmap.Height)
+                End If
+
+                Using previewBitmap As New Bitmap(outputCanvasSize, outputCanvasSize, PixelFormat.Format24bppRgb)
+                    Using graphicsContext As System.Drawing.Graphics = System.Drawing.Graphics.FromImage(previewBitmap)
+                        graphicsContext.Clear(Color.White)
+                        graphicsContext.InterpolationMode = InterpolationMode.HighQualityBicubic
+                        graphicsContext.SmoothingMode = SmoothingMode.AntiAlias
+                        graphicsContext.PixelOffsetMode = PixelOffsetMode.HighQuality
+                        graphicsContext.CompositingQuality = CompositingQuality.HighQuality
+
+                        Dim scale = Math.Min((outputCanvasSize * contentFillRatio) / normalizedBounds.Width,
+                                             (outputCanvasSize * contentFillRatio) / normalizedBounds.Height)
+                        Dim targetWidth = Math.Max(1, CInt(normalizedBounds.Width * scale))
+                        Dim targetHeight = Math.Max(1, CInt(normalizedBounds.Height * scale))
+                        Dim targetX = (outputCanvasSize - targetWidth) \ 2
+                        Dim targetY = (outputCanvasSize - targetHeight) \ 2
+
+                        graphicsContext.DrawImage(croppedBitmap,
+                                                  New Rectangle(targetX, targetY, targetWidth, targetHeight),
+                                                  normalizedBounds,
+                                                  GraphicsUnit.Pixel)
+                    End Using
+
+                    previewBitmap.Save(tempImagePath, ImageFormat.Jpeg)
+                End Using
+            End Using
+        End Using
+
+        ReplaceNormalizedPreviewImage(outputImagePath, tempImagePath)
+    End Sub
+
+    Private Sub ReplaceNormalizedPreviewImage(imagePath As String, tempImagePath As String)
+        If File.Exists(imagePath) Then
+            File.Delete(imagePath)
+        End If
+
+        File.Move(tempImagePath, imagePath)
+    End Sub
+
+    Private Function EstimateRowBackground(sourceBitmap As Bitmap,
+                                           row As Integer,
+                                           sampleWidth As Integer) As Color
+
+        Dim effectiveSampleWidth = Math.Min(sampleWidth, Math.Max(1, sourceBitmap.Width \ 10))
+        Dim totalR As Integer = 0
+        Dim totalG As Integer = 0
+        Dim totalB As Integer = 0
+        Dim sampleCount As Integer = 0
+
+        For x As Integer = 0 To effectiveSampleWidth - 1
+            Dim leftPixel = sourceBitmap.GetPixel(x, row)
+            totalR += leftPixel.R
+            totalG += leftPixel.G
+            totalB += leftPixel.B
+            sampleCount += 1
+
+            Dim rightPixel = sourceBitmap.GetPixel(sourceBitmap.Width - 1 - x, row)
+            totalR += rightPixel.R
+            totalG += rightPixel.G
+            totalB += rightPixel.B
+            sampleCount += 1
+        Next
+
+        Return Color.FromArgb(totalR \ sampleCount, totalG \ sampleCount, totalB \ sampleCount)
+    End Function
+
+    Private Function FindContentBounds(sourceBitmap As Bitmap,
+                                       contentThreshold As Integer,
+                                       sampleWidth As Integer) As Rectangle
+
+        Dim minX As Integer = sourceBitmap.Width - 1
+        Dim minY As Integer = sourceBitmap.Height - 1
+        Dim maxX As Integer = 0
+        Dim maxY As Integer = 0
+        Dim hasContent As Boolean = False
+
+        For y As Integer = 0 To sourceBitmap.Height - 1
+            Dim backgroundColor = EstimateRowBackground(sourceBitmap, y, sampleWidth)
+
+            For x As Integer = 0 To sourceBitmap.Width - 1
+                Dim pixel = sourceBitmap.GetPixel(x, y)
+                Dim distance = Math.Abs(CInt(pixel.R) - CInt(backgroundColor.R)) +
+                               Math.Abs(CInt(pixel.G) - CInt(backgroundColor.G)) +
+                               Math.Abs(CInt(pixel.B) - CInt(backgroundColor.B))
+
+                If distance > contentThreshold Then
+                    hasContent = True
+                    If x < minX Then minX = x
+                    If y < minY Then minY = y
+                    If x > maxX Then maxX = x
+                    If y > maxY Then maxY = y
+                End If
+            Next
+        Next
+
+        If Not hasContent Then
+            Return Rectangle.Empty
+        End If
+
+        Dim marginX = Math.Max(4, CInt((maxX - minX + 1) * 0.12))
+        Dim marginY = Math.Max(4, CInt((maxY - minY + 1) * 0.12))
+        Dim cropLeft = Math.Max(0, minX - marginX)
+        Dim cropTop = Math.Max(0, minY - marginY)
+        Dim cropRight = Math.Min(sourceBitmap.Width - 1, maxX + marginX)
+        Dim cropBottom = Math.Min(sourceBitmap.Height - 1, maxY + marginY)
+
+        Return Rectangle.FromLTRB(cropLeft,
+                                  cropTop,
+                                  cropRight + 1,
+                                  cropBottom + 1)
+    End Function
+
+    Private Sub NormalizePreviewBackground(previewBitmap As Bitmap,
+                                           contentThreshold As Integer,
+                                           sampleWidth As Integer)
+
+        For y As Integer = 0 To previewBitmap.Height - 1
+            Dim backgroundColor = EstimateRowBackground(previewBitmap, y, sampleWidth)
+
+            For x As Integer = 0 To previewBitmap.Width - 1
+                Dim pixel = previewBitmap.GetPixel(x, y)
+                Dim distance = Math.Abs(CInt(pixel.R) - CInt(backgroundColor.R)) +
+                               Math.Abs(CInt(pixel.G) - CInt(backgroundColor.G)) +
+                               Math.Abs(CInt(pixel.B) - CInt(backgroundColor.B))
+
+                If distance <= contentThreshold Then
+                    previewBitmap.SetPixel(x, y, Color.White)
+                End If
+            Next
+        Next
+    End Sub
+
+    Private Sub SaveSheetWindowImageWithFallback(sheetWindow As Object,
+                                                 outputJpgFilePath As String)
+
+        Dim widths() As Integer = {3840, 2560, 1920, 1600, 1280}
+        Dim heights() As Integer = {2160, 1440, 1080, 900, 720}
+        Dim resolutions() As Integer = {1, 1, 1, 1, 1}
+        Dim colorDepth As Object = 24
+        Dim imageQuality = SolidEdgeFramework.SeImageQualityType.seImageQualityHigh
+        Dim invert As Boolean = False
+        Dim lastException As Exception = Nothing
+
+        For i As Integer = 0 To widths.Length - 1
+            Try
+                sheetWindow.SaveAsImage(outputJpgFilePath,
+                                        widths(i),
+                                        heights(i),
+                                        resolutions(i),
+                                        colorDepth,
+                                        imageQuality,
+                                        invert)
+                Return
+            Catch ex As COMException
+                lastException = ex
+
+                If ex.HResult <> &H8007000E Then
+                    Throw
+                End If
+            End Try
+        Next
+
+        If lastException IsNot Nothing Then
+            Throw lastException
+        End If
     End Sub
 
 
@@ -595,6 +1121,7 @@ Public Class SET_MainForm
 
             ' Get a reference to the active sheet
             objSheet = objDraft.ActiveSheet
+            objSheet.BackgroundVisible = False
 
             ' Get a reference to the model links collection
             objModelLinks = objDraft.ModelLinks
@@ -724,9 +1251,8 @@ Public Class SET_MainForm
 
 
     Public Sub DisegniDiPiega_ExportJPG(ByVal seApplication As SolidEdgeFramework.Application,
-                        outputDFTFilePath As String,
                         modelLinkPath As String,
-                        scale As Double)
+                        outputJpgFilePath As String)
 
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
@@ -735,9 +1261,9 @@ Public Class SET_MainForm
         Dim objModelLink As SolidEdgeDraft.ModelLink = Nothing
         Dim objDrawingViews As SolidEdgeDraft.DrawingViews = Nothing
         Dim objDrawingView As SolidEdgeDraft.DrawingView = Nothing
-        Dim seView As SolidEdgeFramework.View = Nothing
-        Dim seWindow As SolidEdgeFramework.Window = Nothing
-        Dim objFoldedView As SolidEdgeDraft.DrawingView = Nothing
+        Dim objSheetSetup As SolidEdgeDraft.SheetSetup = Nothing
+        Dim sheetWindow As Object = Nothing
+        Dim missingValue As Object = System.Reflection.Missing.Value
 
         Try
             objDocuments = seApplication.Documents
@@ -756,79 +1282,81 @@ Public Class SET_MainForm
 
             ' Get a reference to the drawing views collection
             objDrawingViews = objSheet.DrawingViews
+            objSheetSetup = objSheet.SheetSetup
 
-            ' Add a FRONT view
-            objDrawingView = objDrawingViews.AddSheetMetalView(
-                objModelLink,
-                SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-                scale,
-                0.12,
-                0.3,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            sheetWindow = seApplication.ActiveWindow
+            sheetWindow.Activate()
 
-            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                SolidEdgeDraft.FoldTypeConstants.igFoldRight,
-                0.3, 0.3)
-            ReleaseCOMReference(objFoldedView)
-            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                SolidEdgeDraft.FoldTypeConstants.igFoldDown,
-                0.1, 0.1)
-            ReleaseCOMReference(objFoldedView)
-            objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
-                0.3, 0.1)
+            Dim usableWidth As Double = CDbl(objSheetSetup.SheetWidth) - CDbl(objSheetSetup.LeftMargin) - CDbl(objSheetSetup.RightMargin)
+            Dim usableHeight As Double = CDbl(objSheetSetup.SheetHeight) - CDbl(objSheetSetup.TopMargin) - CDbl(objSheetSetup.BottomMargin)
+            Dim orientation = SolidEdgeDraft.ViewOrientationConstants.igTrimetricTopFrontRightView
+            Dim minX As Double = 0
+            Dim minY As Double = 0
+            Dim maxX As Double = 0
+            Dim maxY As Double = 0
+            Dim projectedWidth As Double
+            Dim projectedHeight As Double
+            Dim viewScale As Double
+            Dim centerX As Double
+            Dim centerY As Double
+            Dim fileExtension = Path.GetExtension(modelLinkPath).ToLowerInvariant()
 
-            ' Assign a caption
-            'objDrawingView.Caption = "Da decidere"
-            ' Ensure caption is displayed
-            'objDrawingView.DisplayCaption = True
+            objModelLink.Range2d(orientation, minX, minY, maxX, maxY, missingValue, missingValue)
 
-            If Not Directory.Exists(Path.GetDirectoryName(outputDFTFilePath)) Then
-                Directory.CreateDirectory(Path.GetDirectoryName(outputDFTFilePath))
-            End If
+            projectedWidth = Math.Abs(maxX - minX)
+            projectedHeight = Math.Abs(maxY - minY)
 
-            If File.Exists(outputDFTFilePath) Then
-                File.Delete(outputDFTFilePath)
-            End If
+            If projectedWidth <= 0 Then projectedWidth = 1
+            If projectedHeight <= 0 Then projectedHeight = 1
 
-            Dim image As Imaging.Metafile
+            viewScale = Math.Min((usableWidth * 0.92) / projectedWidth,
+                                 (usableHeight * 0.92) / projectedHeight)
 
+            centerX = CDbl(objSheetSetup.LeftMargin) + (usableWidth / 2)
+            centerY = CDbl(objSheetSetup.BottomMargin) + (usableHeight / 2)
 
-            image = objSheet.GetEnhancedMetafile()
-
-
-
-
-            Dim Width As Object = 1920
-            Dim Height As Object = 1080
-            Dim AltViewStyle As Object = "Default"
-            Dim Resolution As Object = 1
-            Dim ColorDepth As Object = 24
-            Dim ImageQuality = SolidEdgeFramework.SeImageQualityType.seImageQualityHigh
-            Dim Invert As Boolean = False
-
-
-            seWindow = TryCast(seApplication.ActiveWindow, SolidEdgeFramework.Window)
-
-            If seWindow Is Nothing Then
-                MessageBox.Show(Me, outputDFTFilePath, "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            If fileExtension = ".par" Then
+                objDrawingView = objDrawingViews.AddPartView(
+                    objModelLink,
+                    orientation,
+                    viewScale,
+                    centerX,
+                    centerY,
+                    SolidEdgeDraft.PartDrawingViewTypeConstants.sePartDesignedView)
+            ElseIf fileExtension = ".psm" Then
+                objDrawingView = objDrawingViews.AddSheetMetalView(
+                    objModelLink,
+                    orientation,
+                    viewScale,
+                    centerX,
+                    centerY,
+                    SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
             Else
-                MessageBox.Show(Me, "TryCast OK", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Throw New NotSupportedException(String.Format("Estensione non supportata per export JPG: {0}", fileExtension))
             End If
 
-            seView = seWindow.View
-            seView.SaveAsImage(outputDFTFilePath, Width, Height, AltViewStyle, Resolution, ColorDepth, ImageQuality, Invert)
+            objDrawingView.DisplayCaption = False
+            sheetWindow.Fit()
+            sheetWindow.Update()
 
+            If Not Directory.Exists(Path.GetDirectoryName(outputJpgFilePath)) Then
+                Directory.CreateDirectory(Path.GetDirectoryName(outputJpgFilePath))
+            End If
+
+            If File.Exists(outputJpgFilePath) Then
+                File.Delete(outputJpgFilePath)
+            End If
+
+            SaveSheetWindowImageWithFallback(sheetWindow, outputJpgFilePath)
 
             objDraft.Close()
 
         Finally
-            ReleaseCOMReference(seView)
-            ReleaseCOMReference(seWindow)
-            ReleaseCOMReference(objFoldedView)
+            ReleaseCOMReference(sheetWindow)
             ReleaseCOMReference(objDocuments)
             ReleaseCOMReference(objDraft)
             ReleaseCOMReference(objSheet)
+            ReleaseCOMReference(objSheetSetup)
             ReleaseCOMReference(objModelLinks)
             ReleaseCOMReference(objModelLink)
             ReleaseCOMReference(objDrawingViews)
@@ -1022,7 +1550,7 @@ Public Class SET_MainForm
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
                 ExportJPG_Execute(ofdSelectASMFile.FileName)
-                MessageBox.Show(Me, "Esportazione in JPG (PAR) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                MessageBox.Show(Me, "Esportazione in JPG (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
 
         Catch exception As Exception
@@ -1033,8 +1561,7 @@ Public Class SET_MainForm
 
     Public Function ExportJPG_Execute(asmFilePath As String) As Boolean
         Dim exportOptions = GetImageExportOptions()
-        Dim draftOptions = GetDraftGenerationOptions()
-        Dim exportService As New ImageExportService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportJPG(app, outputPath, modelLinkPath, draftOptions.Scale),
+        Dim exportService As New ImageExportService(AddressOf ExportModelDocumentImage,
                                                     AddressOf DisplayException)
 
         Return _workflowService.ExecuteWithAssembly(

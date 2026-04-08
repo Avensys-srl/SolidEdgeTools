@@ -80,5 +80,7 @@ Public Class NeutralExportService
                 End Select
             End Try
         Loop
+
+        Return False
     End Function
 End Class

@@ -28,7 +28,9 @@ Public Class ImageExportService
                     Return True
                 End If
 
-                If Path.GetExtension(item.OccurrenceFileName) <> ".par" Then
+                Dim extension = Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant()
+
+                If extension <> ".par" AndAlso extension <> ".psm" Then
                     Return True
                 End If
 
@@ -72,5 +74,7 @@ Public Class ImageExportService
                 End Select
             End Try
         Loop
+
+        Return False
     End Function
 End Class

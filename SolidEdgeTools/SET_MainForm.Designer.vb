@@ -216,7 +216,7 @@ Partial Class SET_MainForm
         '
         'btnExportJPG
         '
-        Me.btnExportJPG.Enabled = False
+        Me.btnExportJPG.Enabled = True
         Me.btnExportJPG.Location = New System.Drawing.Point(228, 36)
         Me.btnExportJPG.Name = "btnExportJPG"
         Me.btnExportJPG.Size = New System.Drawing.Size(74, 25)

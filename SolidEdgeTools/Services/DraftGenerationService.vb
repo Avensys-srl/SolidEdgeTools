@@ -71,6 +71,8 @@ Public Class DraftGenerationService
                 End Select
             End Try
         Loop
+
+        Return False
     End Function
 
     Private Function BuildOutputPath(rootAssemblyPath As String,

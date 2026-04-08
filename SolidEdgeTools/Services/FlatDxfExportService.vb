@@ -72,5 +72,7 @@ Public Class FlatDxfExportService
                 End Select
             End Try
         Loop
+
+        Return False
     End Function
 End Class
