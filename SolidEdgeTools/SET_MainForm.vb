@@ -20,10 +20,6 @@ Public Class SET_MainForm
 
     Private Sub btnPropTable_Click(sender As System.Object, e As System.EventArgs) Handles btnPropTable.Click
 
-        Dim session As SolidEdgeSessionContext = Nothing
-        Dim objApp As SolidEdgeFramework.Application = Nothing
-        Dim objDocuments As SolidEdgeFramework.Documents = Nothing
-        Dim objDocument As SolidEdgeFramework.SolidEdgeDocument = Nothing
         Dim xlsArray(100, 3) As String
         Dim index As Integer = 0
         Dim objPropSets As SolidEdgeFileProperties.PropertySets = New SolidEdgeFileProperties.PropertySets
@@ -35,17 +31,9 @@ Public Class SET_MainForm
                 sfdSelectXLSFile.FileName = Prefisso.Text + "Proprietà_" + Path.GetFileNameWithoutExtension(ofdSelectPSMFile.FileName)
                 If sfdSelectXLSFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
 
-
-                    session = SolidEdgeSessionHelpers.OpenApplication(True)
-                    objApp = session.Application
-                    ' Turn off alerts. Weldment environment will display a warning
-                    objApp.DisplayAlerts = True
-                    ' Get a reference to the Documents collection
-                    objDocuments = objApp.Documents
-                    ' Create an instance of each document environment
                     Dim sDocument As String = ofdSelectPSMFile.FileName
 
-                    objPropSets.Open(sDocument, True)
+                    objPropSets.Open(sDocument, False)
 
                     xlsArray.SetValue("Classe", index, 0)
                     xlsArray.SetValue("Proprietà", index, 1)
@@ -80,8 +68,6 @@ Public Class SET_MainForm
                 objPropSets.Close()
                 ReleaseCOMReference(objPropSets)
             End If
-            ReleaseCOMReference(objDocuments)
-            SE_CloseApplication(session, True)
         End Try
     End Sub
 
@@ -1139,7 +1125,11 @@ Public Class SET_MainForm
 
             ' Get a reference to the active sheet
             objSheet = objDraft.ActiveSheet
-            objSheet.BackgroundVisible = False
+            If objSheet.BackgroundVisible = False Then
+                objSheet.BackgroundVisible = True
+            Else
+                objSheet.BackgroundVisible = True
+            End If
 
             ' Get a reference to the model links collection
             objModelLinks = objDraft.ModelLinks
