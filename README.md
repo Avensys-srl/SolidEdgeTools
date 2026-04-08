@@ -1,6 +1,6 @@
 # SolidEdgeTools
 
-[![Version](https://img.shields.io/badge/version-1.1.1.0-blue)](./SolidEdgeTools/My%20Project/AssemblyInfo.vb)
+[![Version](https://img.shields.io/badge/version-1.2.0.0-blue)](./SolidEdgeTools/My%20Project/AssemblyInfo.vb)
 [![VB.NET](https://img.shields.io/badge/language-VB.NET-5C2D91)](./SolidEdgeTools)
 [![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.6-512BD4)](./SolidEdgeTools/SolidEdgeTools.vbproj)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x86-0078D6)](./SolidEdgeTools/SolidEdgeTools.vbproj)
@@ -19,9 +19,11 @@ The current tool already supports:
 - DXF export for sheet metal parts
 - STL / STP export
 - DFT generation for sheet metal and 3D views
+- optional automatic DFT layout for sheet metal views
 - DFT publishing to PDF / DWG
 - image export
 - project property coding
+- chained `Produzione Lamiera` workflow
 
 This is still primarily a **production automation / output tool**, but the repository now includes the first architectural layers for stronger configuration-driven CAD automation.
 
@@ -157,6 +159,7 @@ Current progress:
 - workflow orchestration layer: implemented
 - configuration layer: started and already used
 - geometry layer: started as template-driven scaffolding
+- `.psm` DFT auto-layout: first usable implementation
 - assembly engine: not started
 - engineering rule engine: not started
 
@@ -167,6 +170,12 @@ Current progress:
 - some legacy UI code and Excel late-binding remain
 - PDF generation still depends on local environment behavior
 - geometry generation is not yet driving real `.par` / `.psm` feature creation
+- `.psm` DFT auto-layout is usable but still visually iterative on edge-on cases
+
+## Near-Term Ideas
+
+- reuse the most recent `Disegni di Piega_old` file for the same part when present, updating model views and preserving existing dimensions/annotations when possible
+- add a dedicated `Produzione Plastiche` workflow using material `FabLab`, supplier BOM export with `Plastiche_` prefix, and STL export chain
 
 ## Debugging Notes
 

@@ -59,6 +59,7 @@ Partial Class SET_MainForm
         Me.progressOperations = New System.Windows.Forms.ProgressBar()
         Me.btnCancelOperation = New System.Windows.Forms.Button()
         Me.btnProduzioneLamiera = New System.Windows.Forms.Button()
+        Me.chkAutoLayoutDft = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
         '
         'btnPropTable
@@ -246,6 +247,18 @@ Partial Class SET_MainForm
         Me.txtScale.Text = "0.5"
         Me.txtScale.TextAlign = System.Windows.Forms.HorizontalAlignment.Right
         '
+        'chkAutoLayoutDft
+        '
+        Me.chkAutoLayoutDft.AutoSize = True
+        Me.chkAutoLayoutDft.Location = New System.Drawing.Point(426, 200)
+        Me.chkAutoLayoutDft.Name = "chkAutoLayoutDft"
+        Me.chkAutoLayoutDft.Size = New System.Drawing.Size(121, 17)
+        Me.chkAutoLayoutDft.TabIndex = 14
+        Me.chkAutoLayoutDft.Checked = True
+        Me.chkAutoLayoutDft.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.chkAutoLayoutDft.Text = "Layout DFT auto"
+        Me.chkAutoLayoutDft.UseVisualStyleBackColor = True
+        '
         'Label3
         '
         Me.Label3.AutoSize = True
@@ -378,6 +391,7 @@ Partial Class SET_MainForm
         Me.Controls.Add(Me.btnCancelOperation)
         Me.Controls.Add(Me.progressOperations)
         Me.Controls.Add(Me.lblProgress)
+        Me.Controls.Add(Me.chkAutoLayoutDft)
         Me.Controls.Add(Me.btnExportSTP)
         Me.Controls.Add(Me.lblVersion)
         Me.Controls.Add(Me.txtScale)
@@ -451,4 +465,5 @@ Partial Class SET_MainForm
     Friend WithEvents progressOperations As ProgressBar
     Friend WithEvents btnCancelOperation As Button
     Friend WithEvents btnProduzioneLamiera As Button
+    Friend WithEvents chkAutoLayoutDft As CheckBox
 End Class

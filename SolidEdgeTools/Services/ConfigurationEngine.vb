@@ -19,6 +19,7 @@ Public Class ConfigurationEngine
                 .Prefix = input.Prefix,
                 .Configuration = input.Prefix,
                 .Scale = input.Scale,
+                .AutoLayoutSheetMetalViews = input.AutoLayoutSheetMetalViews,
                 .SelectedMaterials = New List(Of String)(input.SelectedMaterials)
             }
         }
@@ -68,6 +69,7 @@ Public Class ConfigurationEngine
         Return New DraftGenerationOptions() With {
             .Prefix = configuration.Unit.Prefix,
             .Scale = configuration.Unit.Scale,
+            .AutoLayoutSheetMetalViews = configuration.Unit.AutoLayoutSheetMetalViews,
             .MaterialSelection = configuration.MaterialSelection
         }
     End Function

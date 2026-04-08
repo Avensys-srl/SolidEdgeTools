@@ -32,6 +32,7 @@ End Class
 Public Class DraftGenerationOptions
     Public Property Prefix As String
     Public Property Scale As Double
+    Public Property AutoLayoutSheetMetalViews As Boolean
     Public Property MaterialSelection As MaterialSelectionOptions
 End Class
 

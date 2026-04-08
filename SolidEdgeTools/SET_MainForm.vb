@@ -1088,7 +1088,7 @@ Public Class SET_MainForm
 
     Public Function GenerateDisegniDiPiega_Execute(asmFilePath As String) As Boolean
         Dim draftOptions = GetDraftGenerationOptions()
-        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
+        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale, draftOptions.AutoLayoutSheetMetalViews),
                                                        AddressOf DisplayException)
 
         Return ExecuteWithProgress(
@@ -1106,62 +1106,86 @@ Public Class SET_MainForm
     Public Sub DisegniDiPiega_ExportDFT(ByVal seApplication As SolidEdgeFramework.Application,
                         outputDFTFilePath As String,
                         modelLinkPath As String,
-                        scale As Double)
+                        scale As Double,
+                        Optional autoLayoutSheetMetalViews As Boolean = False)
 
         Dim objDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
         Dim objSheet As SolidEdgeDraft.Sheet = Nothing
+        Dim objSheetSetup As SolidEdgeDraft.SheetSetup = Nothing
         Dim objModelLinks As SolidEdgeDraft.ModelLinks = Nothing
         Dim objModelLink As SolidEdgeDraft.ModelLink = Nothing
         Dim objDrawingViews As SolidEdgeDraft.DrawingViews = Nothing
         Dim objDrawingView As SolidEdgeDraft.DrawingView = Nothing
         Dim objFoldedView As SolidEdgeDraft.DrawingView = Nothing
+        Dim objTopView As SolidEdgeDraft.DrawingView = Nothing
+        Dim objRightView As SolidEdgeDraft.DrawingView = Nothing
+        Dim objIsoView As SolidEdgeDraft.DrawingView = Nothing
 
         Try
             objDocuments = seApplication.Documents
-
-            ' Add a Draft document
-            objDraft = objDocuments.Add("SolidEdge.DraftDocument")
-
-            ' Get a reference to the active sheet
-            objSheet = objDraft.ActiveSheet
-            If objSheet.BackgroundVisible = False Then
-                objSheet.BackgroundVisible = True
-            Else
-                objSheet.BackgroundVisible = True
-            End If
-
-            ' Get a reference to the model links collection
-            objModelLinks = objDraft.ModelLinks
-
-            ' Add a new model link
-            objModelLink = objModelLinks.Add(modelLinkPath)
-
-            ' Get a reference to the drawing views collection
-            objDrawingViews = objSheet.DrawingViews
+            CreateDraftDocumentContext(objDocuments,
+                                       modelLinkPath,
+                                       objDraft,
+                                       objSheet,
+                                       objSheetSetup,
+                                       objModelLinks,
+                                       objModelLink,
+                                       objDrawingViews)
 
             If Path.GetExtension(modelLinkPath) = ".psm" Then
+                If autoLayoutSheetMetalViews Then
+                    autoLayoutSheetMetalViews = TryCreateAutoLayoutSheetMetalViews(objDocuments,
+                                                                                   modelLinkPath,
+                                                                                   objSheetSetup,
+                                                                                   objModelLink,
+                                                                                   objDrawingViews,
+                                                                                   scale,
+                                                                                   objDrawingView,
+                                                                                   objTopView,
+                                                                                   objRightView,
+                                                                                   objIsoView)
 
-                ' Add a FRONT view
-                objDrawingView = objDrawingViews.AddSheetMetalView(
-                objModelLink,
-                SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-                scale,
-                0.1,
-                0.3,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+                    If Not autoLayoutSheetMetalViews Then
+                        ResetDraftDocumentContext(objDocuments,
+                                                  modelLinkPath,
+                                                  objDraft,
+                                                  objSheet,
+                                                  objSheetSetup,
+                                                  objModelLinks,
+                                                  objModelLink,
+                                                  objDrawingViews,
+                                                  objDrawingView,
+                                                  objTopView,
+                                                  objRightView,
+                                                  objIsoView,
+                                                  objFoldedView)
+                    End If
+                End If
 
-                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                    SolidEdgeDraft.FoldTypeConstants.igFoldRight,
-                    0.3, 0.3)
-                ReleaseCOMReference(objFoldedView)
-                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                    SolidEdgeDraft.FoldTypeConstants.igFoldDown,
-                    0.1, 0.1)
-                ReleaseCOMReference(objFoldedView)
-                objFoldedView = objDrawingViews.AddByFold(objDrawingView,
-                SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
-                0.3, 0.1)
+                If Not autoLayoutSheetMetalViews Then
+                    objDrawingView = objDrawingViews.AddSheetMetalView(
+                    objModelLink,
+                    SolidEdgeDraft.ViewOrientationConstants.igFrontView,
+                    scale,
+                    0.1,
+                    0.3,
+                    SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+                    objFoldedView = objDrawingViews.AddByFold(objDrawingView,
+                        SolidEdgeDraft.FoldTypeConstants.igFoldRight,
+                        0.3, 0.3)
+                    ReleaseCOMReference(objFoldedView)
+                    objFoldedView = Nothing
+                    objFoldedView = objDrawingViews.AddByFold(objDrawingView,
+                        SolidEdgeDraft.FoldTypeConstants.igFoldDown,
+                        0.1, 0.1)
+                    ReleaseCOMReference(objFoldedView)
+                    objFoldedView = Nothing
+                    objFoldedView = objDrawingViews.AddByFold(objDrawingView,
+                    SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
+                    0.3, 0.1)
+                End If
             End If
 
 
@@ -1195,16 +1219,561 @@ Public Class SET_MainForm
             objDraft.Close()
 
         Finally
+            ReleaseCOMReference(objIsoView)
+            ReleaseCOMReference(objRightView)
+            ReleaseCOMReference(objTopView)
             ReleaseCOMReference(objFoldedView)
             ReleaseCOMReference(objDocuments)
             ReleaseCOMReference(objDraft)
             ReleaseCOMReference(objSheet)
+            ReleaseCOMReference(objSheetSetup)
             ReleaseCOMReference(objModelLinks)
             ReleaseCOMReference(objModelLink)
             ReleaseCOMReference(objDrawingViews)
             ReleaseCOMReference(objDrawingView)
         End Try
     End Sub
+
+    Private Sub CreateDraftDocumentContext(objDocuments As SolidEdgeFramework.Documents,
+                                           modelLinkPath As String,
+                                           ByRef objDraft As SolidEdgeDraft.DraftDocument,
+                                           ByRef objSheet As SolidEdgeDraft.Sheet,
+                                           ByRef objSheetSetup As SolidEdgeDraft.SheetSetup,
+                                           ByRef objModelLinks As SolidEdgeDraft.ModelLinks,
+                                           ByRef objModelLink As SolidEdgeDraft.ModelLink,
+                                           ByRef objDrawingViews As SolidEdgeDraft.DrawingViews)
+
+        objDraft = objDocuments.Add("SolidEdge.DraftDocument")
+        objSheet = objDraft.ActiveSheet
+        objSheet.BackgroundVisible = True
+        objSheetSetup = objSheet.SheetSetup
+        Try
+            objSheetSetup.ClearDrawingViewForSheetScale()
+        Catch
+        End Try
+        objModelLinks = objDraft.ModelLinks
+        objModelLink = objModelLinks.Add(modelLinkPath)
+        objDrawingViews = objSheet.DrawingViews
+    End Sub
+
+    Private Sub ResetDraftDocumentContext(objDocuments As SolidEdgeFramework.Documents,
+                                          modelLinkPath As String,
+                                          ByRef objDraft As SolidEdgeDraft.DraftDocument,
+                                          ByRef objSheet As SolidEdgeDraft.Sheet,
+                                          ByRef objSheetSetup As SolidEdgeDraft.SheetSetup,
+                                          ByRef objModelLinks As SolidEdgeDraft.ModelLinks,
+                                          ByRef objModelLink As SolidEdgeDraft.ModelLink,
+                                          ByRef objDrawingViews As SolidEdgeDraft.DrawingViews,
+                                          ByRef objDrawingView As SolidEdgeDraft.DrawingView,
+                                          ByRef objTopView As SolidEdgeDraft.DrawingView,
+                                          ByRef objRightView As SolidEdgeDraft.DrawingView,
+                                          ByRef objIsoView As SolidEdgeDraft.DrawingView,
+                                          ByRef objFoldedView As SolidEdgeDraft.DrawingView)
+
+        Try
+            If objDraft IsNot Nothing Then
+                objDraft.Close()
+            End If
+        Catch
+        End Try
+
+        ReleaseCOMReference(objIsoView)
+        ReleaseCOMReference(objRightView)
+        ReleaseCOMReference(objTopView)
+        ReleaseCOMReference(objFoldedView)
+        ReleaseCOMReference(objDrawingView)
+        ReleaseCOMReference(objDrawingViews)
+        ReleaseCOMReference(objModelLink)
+        ReleaseCOMReference(objModelLinks)
+        ReleaseCOMReference(objSheetSetup)
+        ReleaseCOMReference(objSheet)
+        ReleaseCOMReference(objDraft)
+
+        objIsoView = Nothing
+        objRightView = Nothing
+        objTopView = Nothing
+        objFoldedView = Nothing
+        objDrawingView = Nothing
+        objDrawingViews = Nothing
+        objModelLink = Nothing
+        objModelLinks = Nothing
+        objSheetSetup = Nothing
+        objSheet = Nothing
+        objDraft = Nothing
+
+        CreateDraftDocumentContext(objDocuments,
+                                   modelLinkPath,
+                                   objDraft,
+                                   objSheet,
+                                   objSheetSetup,
+                                   objModelLinks,
+                                   objModelLink,
+                                   objDrawingViews)
+    End Sub
+
+    Private Function TryCreateAutoLayoutSheetMetalViews(objDocuments As SolidEdgeFramework.Documents,
+                                                        modelLinkPath As String,
+                                                        sheetSetup As SolidEdgeDraft.SheetSetup,
+                                                        modelLink As SolidEdgeDraft.ModelLink,
+                                                        drawingViews As SolidEdgeDraft.DrawingViews,
+                                                        requestedScale As Double,
+                                                        ByRef frontView As SolidEdgeDraft.DrawingView,
+                                                        ByRef topView As SolidEdgeDraft.DrawingView,
+                                                        ByRef rightView As SolidEdgeDraft.DrawingView,
+                                                        ByRef isoView As SolidEdgeDraft.DrawingView) As Boolean
+
+        Dim usableWidth As Double
+        Dim usableHeight As Double
+        Dim leftMargin As Double
+        Dim bottomMargin As Double
+        Dim sheetCenterX As Double
+        Dim sheetCenterY As Double
+        Dim viewPlan As SheetMetalAutoLayoutPlan
+
+        Try
+            If objDocuments Is Nothing OrElse sheetSetup Is Nothing OrElse modelLink Is Nothing OrElse drawingViews Is Nothing Then
+                Return False
+            End If
+
+            viewPlan = MeasureSheetMetalAutoLayoutPlan(objDocuments, modelLinkPath, requestedScale)
+            If viewPlan Is Nothing Then
+                Return False
+            End If
+
+            usableWidth = CDbl(sheetSetup.SheetWidth) - CDbl(sheetSetup.LeftMargin) - CDbl(sheetSetup.RightMargin)
+            usableHeight = CDbl(sheetSetup.SheetHeight) - CDbl(sheetSetup.TopMargin) - CDbl(sheetSetup.BottomMargin)
+            leftMargin = CDbl(sheetSetup.LeftMargin)
+            bottomMargin = CDbl(sheetSetup.BottomMargin)
+            sheetCenterX = leftMargin + (usableWidth / 2)
+            sheetCenterY = bottomMargin + (usableHeight / 2)
+
+            frontView = drawingViews.AddSheetMetalView(
+                modelLink,
+                viewPlan.MainOrientation,
+                viewPlan.FinalScale,
+                sheetCenterX,
+                sheetCenterY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            topView = drawingViews.AddSheetMetalView(
+                modelLink,
+                viewPlan.TopOrientation,
+                viewPlan.FinalScale,
+                sheetCenterX,
+                sheetCenterY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            rightView = drawingViews.AddSheetMetalView(
+                modelLink,
+                viewPlan.SideOrientation,
+                viewPlan.FinalScale,
+                sheetCenterX,
+                sheetCenterY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            isoView = drawingViews.AddSheetMetalView(
+                modelLink,
+                SolidEdgeDraft.ViewOrientationConstants.igTrimetricTopFrontRightView,
+                viewPlan.FinalScale,
+                sheetCenterX,
+                sheetCenterY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            ApplyAutoLayoutToSheetMetalViews(sheetSetup,
+                                             sheetCenterX,
+                                             sheetCenterY,
+                                             frontView,
+                                             topView,
+                                             rightView,
+                                             isoView)
+
+            Return True
+        Catch
+            Return False
+        End Try
+    End Function
+
+    Private Function MeasureSheetMetalAutoLayoutPlan(objDocuments As SolidEdgeFramework.Documents,
+                                                     modelLinkPath As String,
+                                                     requestedScale As Double) As SheetMetalAutoLayoutPlan
+
+        Dim tempDraft As SolidEdgeDraft.DraftDocument = Nothing
+        Dim tempSheet As SolidEdgeDraft.Sheet = Nothing
+        Dim tempSheetSetup As SolidEdgeDraft.SheetSetup = Nothing
+        Dim tempModelLinks As SolidEdgeDraft.ModelLinks = Nothing
+        Dim tempModelLink As SolidEdgeDraft.ModelLink = Nothing
+        Dim tempDrawingViews As SolidEdgeDraft.DrawingViews = Nothing
+        Dim tempFrontView As SolidEdgeDraft.DrawingView = Nothing
+        Dim tempTopView As SolidEdgeDraft.DrawingView = Nothing
+        Dim tempRightView As SolidEdgeDraft.DrawingView = Nothing
+        Dim tempIsoView As SolidEdgeDraft.DrawingView = Nothing
+        Dim infoMain As ViewLayoutInfo = Nothing
+        Dim infoTop As ViewLayoutInfo = Nothing
+        Dim infoSide As ViewLayoutInfo = Nothing
+        Dim infoIso As ViewLayoutInfo = Nothing
+        Dim viewPlan As SheetMetalAutoLayoutPlan = Nothing
+        Dim usableWidth As Double
+        Dim usableHeight As Double
+        Dim leftMargin As Double
+        Dim bottomMargin As Double
+        Dim centerX As Double
+        Dim centerY As Double
+        Dim seedScale As Double
+
+        Try
+            tempDraft = objDocuments.Add("SolidEdge.DraftDocument")
+            tempSheet = tempDraft.ActiveSheet
+            tempSheet.BackgroundVisible = True
+            tempSheetSetup = tempSheet.SheetSetup
+            tempModelLinks = tempDraft.ModelLinks
+            tempModelLink = tempModelLinks.Add(modelLinkPath)
+            tempDrawingViews = tempSheet.DrawingViews
+
+            usableWidth = CDbl(tempSheetSetup.SheetWidth) - CDbl(tempSheetSetup.LeftMargin) - CDbl(tempSheetSetup.RightMargin)
+            usableHeight = CDbl(tempSheetSetup.SheetHeight) - CDbl(tempSheetSetup.TopMargin) - CDbl(tempSheetSetup.BottomMargin)
+            leftMargin = CDbl(tempSheetSetup.LeftMargin)
+            bottomMargin = CDbl(tempSheetSetup.BottomMargin)
+            centerX = leftMargin + (usableWidth / 2)
+            centerY = bottomMargin + (usableHeight / 2)
+            seedScale = Math.Max(0.05, Math.Min(0.25, requestedScale))
+
+            viewPlan = BuildSheetMetalAutoLayoutPlan(tempModelLink)
+
+            tempFrontView = tempDrawingViews.AddSheetMetalView(
+                tempModelLink,
+                viewPlan.MainOrientation,
+                seedScale,
+                centerX,
+                centerY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            tempTopView = tempDrawingViews.AddSheetMetalView(
+                tempModelLink,
+                viewPlan.TopOrientation,
+                seedScale,
+                centerX,
+                centerY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            tempRightView = tempDrawingViews.AddSheetMetalView(
+                tempModelLink,
+                viewPlan.SideOrientation,
+                seedScale,
+                centerX,
+                centerY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            tempIsoView = tempDrawingViews.AddSheetMetalView(
+                tempModelLink,
+                SolidEdgeDraft.ViewOrientationConstants.igTrimetricTopFrontRightView,
+                seedScale,
+                centerX,
+                centerY,
+                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+
+            infoMain = CreateViewLayoutInfo(tempFrontView, centerX, centerY)
+            infoTop = CreateViewLayoutInfo(tempTopView, centerX, centerY)
+            infoSide = CreateViewLayoutInfo(tempRightView, centerX, centerY)
+            infoIso = CreateViewLayoutInfo(tempIsoView, centerX, centerY)
+
+            PrepareAutoLayoutView(infoMain.View)
+            PrepareAutoLayoutView(infoTop.View)
+            PrepareAutoLayoutView(infoSide.View)
+            PrepareAutoLayoutView(infoIso.View)
+
+            RefreshViewLayoutInfo(infoMain)
+            RefreshViewLayoutInfo(infoTop)
+            RefreshViewLayoutInfo(infoSide)
+            RefreshViewLayoutInfo(infoIso)
+
+            viewPlan.FinalScale = CalculateAutoLayoutScaleFactor(tempSheetSetup,
+                                                                 infoMain,
+                                                                 infoTop,
+                                                                 infoSide,
+                                                                 infoIso,
+                                                                 seedScale)
+
+            Return viewPlan
+        Catch
+            Return Nothing
+        Finally
+            Try
+                If tempDraft IsNot Nothing Then
+                    tempDraft.Close(False)
+                End If
+            Catch
+            End Try
+
+            ReleaseCOMReference(tempIsoView)
+            ReleaseCOMReference(tempRightView)
+            ReleaseCOMReference(tempTopView)
+            ReleaseCOMReference(tempFrontView)
+            ReleaseCOMReference(tempDrawingViews)
+            ReleaseCOMReference(tempModelLink)
+            ReleaseCOMReference(tempModelLinks)
+            ReleaseCOMReference(tempSheetSetup)
+            ReleaseCOMReference(tempSheet)
+            ReleaseCOMReference(tempDraft)
+        End Try
+    End Function
+
+    Private Sub ApplyAutoLayoutToSheetMetalViews(sheetSetup As SolidEdgeDraft.SheetSetup,
+                                                 initialOriginX As Double,
+                                                 initialOriginY As Double,
+                                                 frontView As SolidEdgeDraft.DrawingView,
+                                                 topView As SolidEdgeDraft.DrawingView,
+                                                 rightView As SolidEdgeDraft.DrawingView,
+                                                 isoView As SolidEdgeDraft.DrawingView)
+
+        If sheetSetup Is Nothing Then
+            Return
+        End If
+
+        Dim views As New List(Of ViewLayoutInfo) From {
+            CreateViewLayoutInfo(frontView, initialOriginX, initialOriginY),
+            CreateViewLayoutInfo(topView, initialOriginX, initialOriginY),
+            CreateViewLayoutInfo(rightView, initialOriginX, initialOriginY),
+            CreateViewLayoutInfo(isoView, initialOriginX, initialOriginY)
+        }
+
+        For Each info In views
+            PrepareAutoLayoutView(info.View)
+            RefreshViewLayoutInfo(info)
+        Next
+
+        Dim usableWidth = CDbl(sheetSetup.SheetWidth) - CDbl(sheetSetup.LeftMargin) - CDbl(sheetSetup.RightMargin)
+        Dim usableHeight = CDbl(sheetSetup.SheetHeight) - CDbl(sheetSetup.TopMargin) - CDbl(sheetSetup.BottomMargin)
+        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.02
+        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.025
+        Dim layoutLeft As Double = CDbl(sheetSetup.LeftMargin) + outerMargin
+        Dim layoutBottom As Double = CDbl(sheetSetup.BottomMargin) + outerMargin
+        Dim layoutWidth As Double = usableWidth - (outerMargin * 2)
+        Dim layoutHeight As Double = usableHeight - (outerMargin * 2)
+        Dim titleBlockReservedHeight As Double = layoutHeight * 0.18
+        Dim leftColumnWidthTarget As Double = layoutWidth * 0.68
+        Dim rightColumnWidthTarget As Double = layoutWidth - leftColumnWidthTarget - gap
+        Dim topRowHeightTarget As Double = layoutHeight * 0.34
+        Dim bottomRowHeightTarget As Double = layoutHeight - topRowHeightTarget - gap
+        Dim isoCellHeightTarget As Double = Math.Max(bottomRowHeightTarget - titleBlockReservedHeight - gap, layoutHeight * 0.22)
+
+        CenterDrawingViewInCell(views(0), layoutLeft, layoutBottom, leftColumnWidthTarget, bottomRowHeightTarget)
+        CenterDrawingViewInCell(views(1), layoutLeft, layoutBottom + bottomRowHeightTarget + gap, leftColumnWidthTarget, topRowHeightTarget)
+        CenterDrawingViewInCell(views(2), layoutLeft + leftColumnWidthTarget + gap, layoutBottom + bottomRowHeightTarget + gap, rightColumnWidthTarget, topRowHeightTarget)
+        CenterDrawingViewInCell(views(3), layoutLeft + leftColumnWidthTarget + gap, layoutBottom + titleBlockReservedHeight + gap, rightColumnWidthTarget, isoCellHeightTarget)
+    End Sub
+
+    Private Function CalculateAutoLayoutScaleFactor(sheetSetup As SolidEdgeDraft.SheetSetup,
+                                                    mainView As ViewLayoutInfo,
+                                                    topView As ViewLayoutInfo,
+                                                    sideView As ViewLayoutInfo,
+                                                    isoView As ViewLayoutInfo,
+                                                    baseScale As Double) As Double
+
+        Dim usableWidth = CDbl(sheetSetup.SheetWidth) - CDbl(sheetSetup.LeftMargin) - CDbl(sheetSetup.RightMargin)
+        Dim usableHeight = CDbl(sheetSetup.SheetHeight) - CDbl(sheetSetup.TopMargin) - CDbl(sheetSetup.BottomMargin)
+        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.02
+        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.025
+        Dim layoutWidth As Double = usableWidth - (outerMargin * 2)
+        Dim layoutHeight As Double = usableHeight - (outerMargin * 2)
+        Dim titleBlockReservedHeight As Double = layoutHeight * 0.16
+        Dim leftColumnWidthTarget As Double = layoutWidth * 0.68
+        Dim rightColumnWidthTarget As Double = layoutWidth - leftColumnWidthTarget - gap
+        Dim topRowHeightTarget As Double = layoutHeight * 0.34
+        Dim bottomRowHeightTarget As Double = layoutHeight - topRowHeightTarget - gap
+        Dim isoCellHeightTarget As Double = Math.Max(bottomRowHeightTarget - titleBlockReservedHeight - gap, layoutHeight * 0.22)
+        Dim scaleFactor As Double = Double.MaxValue
+
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(mainView, leftColumnWidthTarget, bottomRowHeightTarget))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(topView, leftColumnWidthTarget, topRowHeightTarget))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(sideView, rightColumnWidthTarget, topRowHeightTarget))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(isoView, rightColumnWidthTarget, isoCellHeightTarget))
+
+        If Double.IsInfinity(scaleFactor) OrElse Double.IsNaN(scaleFactor) OrElse scaleFactor <= 0 Then
+            Return 1.0
+        End If
+
+        Return Math.Max(0.01, baseScale * scaleFactor)
+    End Function
+
+    Private Sub PrepareAutoLayoutView(view As SolidEdgeDraft.DrawingView)
+        If view Is Nothing Then
+            Return
+        End If
+
+        Try
+            view.DisplayCaption = False
+        Catch
+        End Try
+
+        Try
+            view.DisplayScale = False
+        Catch
+        End Try
+
+        Try
+            view.DisplaySuffix = False
+        Catch
+        End Try
+
+        Try
+            view.SetPerspectiveOff()
+        Catch
+        End Try
+
+        Try
+            view.Update()
+        Catch
+        End Try
+    End Sub
+
+    Private Function CreateViewLayoutInfo(view As SolidEdgeDraft.DrawingView,
+                                          originX As Double,
+                                          originY As Double) As ViewLayoutInfo
+
+        Return New ViewLayoutInfo With {
+            .View = view,
+            .OriginX = originX,
+            .OriginY = originY
+        }
+    End Function
+
+    Private Sub RefreshViewLayoutInfo(info As ViewLayoutInfo)
+        If info Is Nothing OrElse info.View Is Nothing Then
+            Return
+        End If
+
+        Dim minX As Double = 0
+        Dim minY As Double = 0
+        Dim maxX As Double = 0
+        Dim maxY As Double = 0
+
+        info.View.Range(minX, minY, maxX, maxY)
+        info.MinX = minX
+        info.MinY = minY
+        info.MaxX = maxX
+        info.MaxY = maxY
+        info.Width = maxX - minX
+        info.Height = maxY - minY
+    End Sub
+
+    Private Sub MoveDrawingViewToLowerLeft(info As ViewLayoutInfo,
+                                           targetMinX As Double,
+                                           targetMinY As Double)
+
+        If info Is Nothing OrElse info.View Is Nothing Then
+            Return
+        End If
+
+        RefreshViewLayoutInfo(info)
+
+        Dim deltaX = targetMinX - info.MinX
+        Dim deltaY = targetMinY - info.MinY
+
+        info.OriginX += deltaX
+        info.OriginY += deltaY
+        info.View.SetOrigin(info.OriginX, info.OriginY)
+        info.View.Update()
+        RefreshViewLayoutInfo(info)
+    End Sub
+
+    Private Sub CenterDrawingViewInCell(info As ViewLayoutInfo,
+                                        cellLeft As Double,
+                                        cellBottom As Double,
+                                        cellWidth As Double,
+                                        cellHeight As Double)
+
+        If info Is Nothing Then
+            Return
+        End If
+
+        Dim targetMinX As Double = cellLeft + Math.Max(0, (cellWidth - info.Width) / 2)
+        Dim targetMinY As Double = cellBottom + Math.Max(0, (cellHeight - info.Height) / 2)
+
+        MoveDrawingViewToLowerLeft(info, targetMinX, targetMinY)
+    End Sub
+
+    Private Function GetCellScaleFactor(info As ViewLayoutInfo,
+                                        cellWidth As Double,
+                                        cellHeight As Double) As Double
+
+        If info Is Nothing OrElse info.Width <= 0 OrElse info.Height <= 0 Then
+            Return 1.0
+        End If
+
+        Return Math.Min((cellWidth * 0.98) / info.Width, (cellHeight * 0.98) / info.Height)
+    End Function
+
+    Private Function BuildSheetMetalAutoLayoutPlan(modelLink As SolidEdgeDraft.ModelLink) As SheetMetalAutoLayoutPlan
+        Dim frontSize = GetProjectedRangeSize(modelLink, SolidEdgeDraft.ViewOrientationConstants.igFrontView)
+        Dim topSize = GetProjectedRangeSize(modelLink, SolidEdgeDraft.ViewOrientationConstants.igTopView)
+        Dim rightSize = GetProjectedRangeSize(modelLink, SolidEdgeDraft.ViewOrientationConstants.igRightView)
+
+        Dim frontArea = frontSize.Width * frontSize.Height
+        Dim topArea = topSize.Width * topSize.Height
+        Dim rightArea = rightSize.Width * rightSize.Height
+
+        If topArea >= frontArea AndAlso topArea >= rightArea Then
+            Return New SheetMetalAutoLayoutPlan With {
+                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
+                .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView,
+                .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView
+            }
+        End If
+
+        If rightArea >= frontArea AndAlso rightArea >= topArea Then
+            Return New SheetMetalAutoLayoutPlan With {
+                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView,
+                .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
+                .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView
+            }
+        End If
+
+        Return New SheetMetalAutoLayoutPlan With {
+            .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView,
+            .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
+            .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView
+        }
+    End Function
+
+    Private Function GetProjectedRangeSize(modelLink As SolidEdgeDraft.ModelLink,
+                                           orientation As SolidEdgeDraft.ViewOrientationConstants) As ProjectedRangeSize
+        Dim minX As Double = 0
+        Dim minY As Double = 0
+        Dim maxX As Double = 0
+        Dim maxY As Double = 0
+        Dim missingValue As Object = System.Reflection.Missing.Value
+
+        modelLink.Range2d(orientation, minX, minY, maxX, maxY, missingValue, missingValue)
+
+        Return New ProjectedRangeSize With {
+            .Width = Math.Abs(maxX - minX),
+            .Height = Math.Abs(maxY - minY)
+        }
+    End Function
+
+    Private Class ViewLayoutInfo
+        Public Property View As SolidEdgeDraft.DrawingView
+        Public Property OriginX As Double
+        Public Property OriginY As Double
+        Public Property MinX As Double
+        Public Property MinY As Double
+        Public Property MaxX As Double
+        Public Property MaxY As Double
+        Public Property Width As Double
+        Public Property Height As Double
+    End Class
+
+    Private Class ProjectedRangeSize
+        Public Property Width As Double
+        Public Property Height As Double
+    End Class
+
+    Private Class SheetMetalAutoLayoutPlan
+        Public Property MainOrientation As SolidEdgeDraft.ViewOrientationConstants
+        Public Property TopOrientation As SolidEdgeDraft.ViewOrientationConstants
+        Public Property SideOrientation As SolidEdgeDraft.ViewOrientationConstants
+        Public Property FinalScale As Double
+    End Class
 
     'Public Sub DisegniDiPiega_RelinkDFT(inputDFTDirectory As String)
 
@@ -1763,7 +2332,7 @@ Public Class SET_MainForm
         Dim bomService As New BomService(AddressOf PsmGetProperty)
         Dim dxfService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
                                                    AddressOf DisplayException)
-        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
+        Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale, draftOptions.AutoLayoutSheetMetalViews),
                                                        AddressOf DisplayException)
         Dim assemblyDirectory = Path.GetDirectoryName(asmFilePath)
         Dim supplierBomPath = Path.Combine(assemblyDirectory, "Lista_" & Path.GetFileNameWithoutExtension(asmFilePath) & ".xlsx")
@@ -2019,6 +2588,7 @@ Public Class SET_MainForm
         Return New DraftGenerationOptions() With {
             .Prefix = Prefisso.Text,
             .Scale = CDbl(txtScale.Text),
+            .AutoLayoutSheetMetalViews = chkAutoLayoutDft.Checked,
             .MaterialSelection = materialSelection
         }
     End Function
@@ -2160,6 +2730,7 @@ Public Class SET_MainForm
         Dim input As New ConfigurationInputModel() With {
             .Prefix = Prefisso.Text,
             .Scale = CDbl(txtScale.Text),
+            .AutoLayoutSheetMetalViews = chkAutoLayoutDft.Checked,
             .IncludeSubAssemblies = all_subasm.Checked,
             .MakeApplicationVisible = se_off.CheckState,
             .ProjectName = txtProgetto.Text,

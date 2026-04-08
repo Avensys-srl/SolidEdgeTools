@@ -126,11 +126,30 @@ Current practical state:
 - a first product/configuration model now exists and the form maps UI state into it
 - first validation and template-geometry scaffolding now exists, but is not yet driving production CAD generation
 - geometry-generation capability is not yet connected to real `.par` / `.psm` creation rules
+- DFT generation for `.psm` now supports an optional first-pass automatic layout mode for orthographic plus isometric views
 
 This means the codebase is now in an **incremental transition state**:
 
 - not yet a CAD automation engine
 - no longer just a monolithic form-based utility
+
+### 4.2 Additional Current Production Workflows
+
+The repository now also includes:
+
+- progress reporting for long-running batch exports
+- cooperative cancellation for export/generation batches
+- default-folder memory for DFT publish workflows
+- a chained `Produzione Lamiera` workflow
+- improved JPG preview generation for parts and sheet metal
+- first-pass automatic DFT layout for sheet metal views
+
+The automatic DFT layout is intentionally still considered **iterative** rather than final. It is already usable, but it remains a refinement area rather than a fully stabilized engine feature.
+
+Planned adjacent workflow candidates now identified from production usage:
+
+- reuse / update of the nearest previous `Disegni di Piega_old` draft when it refers to the same part
+- dedicated `Produzione Plastiche` workflow for `FabLab` material and STL-oriented outputs
 
 ---
 
@@ -418,6 +437,72 @@ Codex should:
 
 1. Analyze VB.NET project
 2. Extract reusable logic
+3. Stabilize the first `.psm` automatic DFT layout mode
+4. Decide whether DFT auto-layout should become the default for sheet metal or remain optional
+5. Continue moving toward template-driven geometry generation
+
+---
+
+## 17. Current Progress vs Target
+
+### Already Solid
+
+- BOM extraction and Excel export
+- material-filtered export workflows
+- DXF export
+- STL/STP export
+- draft publishing to PDF/DWG
+- image preview export
+- session/document orchestration
+- progress and cancellation feedback
+
+### In Progress
+
+- typed workflow/configuration mapping
+- validation and geometry planning scaffolding
+- optional automatic `.psm` DFT layout
+
+### Not Started / Not Yet Production-Ready
+
+- true geometry-generation services for `.psm`
+- template-driven modification of named variables/features
+- assembly composition engine
+- intent/rule-driven product generation
+
+---
+
+## 18. Current `.psm` DFT Auto-Layout Notes
+
+Current intent:
+
+- generate 3 principal views plus one isometric view for sheet metal parts
+- choose the main view from the strongest projected orientation
+- scale the four views to occupy most of the usable sheet area
+- keep the title block area clear
+- preserve the existing manual-scale fallback when automatic layout fails
+
+Current implementation state:
+
+- works as an optional mode driven by UI flag
+- UI default is now enabled
+- uses measured drawing-view extents rather than only fixed scale assumptions
+- now produces non-legacy, non-duplicate layouts on real test parts
+- still needs visual tuning for flat/degenerate edge-on cases
+
+Important limitation:
+
+- very thin sheet metal parts can still produce orthographic views that visually collapse to near-lines; this is a geometry/orientation reality, not necessarily a fallback defect
+
+Potential next improvement:
+
+- when a previous `Disegni di Piega_old` folder exists, locate the nearest previous DFT for the same part, relink/update the model view silently, preserve existing dimensions/annotations where possible, and only adjust scale/layout if the updated geometry no longer fits cleanly
+
+Additional workflow candidate:
+
+- introduce `Produzione Plastiche`:
+  - material target limited to `FabLab`
+  - supplier BOM export saved with `Plastiche_` prefix
+  - STL export chain for the filtered components
 3. Refactor architecture
 4. Implement Geometry Engine
 5. Integrate existing export logic

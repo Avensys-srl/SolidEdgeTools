@@ -1,6 +1,7 @@
 Public Class ConfigurationInputModel
     Public Property Prefix As String
     Public Property Scale As Double
+    Public Property AutoLayoutSheetMetalViews As Boolean
     Public Property IncludeSubAssemblies As Boolean
     Public Property MakeApplicationVisible As Boolean
     Public Property SelectedMaterials As New List(Of String)
@@ -19,6 +20,7 @@ Public Class UnitModel
     Public Property Prefix As String
     Public Property Configuration As String
     Public Property Scale As Double
+    Public Property AutoLayoutSheetMetalViews As Boolean
     Public Property SelectedMaterials As New List(Of String)
 End Class
 
