@@ -9,15 +9,27 @@ Public Class DraftPublishService
     End Sub
 
     Public Function PublishPdf(seApplication As SolidEdgeFramework.Application,
-                               options As DraftPublishOptions) As Boolean
+                               options As DraftPublishOptions,
+                               Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                               Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
+        Dim dftFiles = Directory.GetFiles(options.InputDirectory, "*.dft")
+        Dim processed As Integer = 0
 
         Try
             seDocuments = seApplication.Documents
 
-            For Each dftPath As String In Directory.GetFiles(options.InputDirectory, "*.dft")
+            If progress IsNot Nothing Then
+                progress(0, dftFiles.Length, "")
+            End If
+
+            For Each dftPath As String In dftFiles
+                If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                    Return False
+                End If
+
                 objDraft = seDocuments.Open(dftPath)
 
                 Dim outPDFFilePath = Path.Combine(Path.GetDirectoryName(dftPath),
@@ -31,6 +43,12 @@ Public Class DraftPublishService
 
                 objDraft.Close()
                 SolidEdgeSessionHelpers.ReleaseCOMReference(objDraft)
+                objDraft = Nothing
+                processed += 1
+
+                If progress IsNot Nothing Then
+                    progress(processed, dftFiles.Length, dftPath)
+                End If
             Next
         Finally
             SolidEdgeSessionHelpers.ReleaseCOMReference(seDocuments)
@@ -40,15 +58,27 @@ Public Class DraftPublishService
     End Function
 
     Public Function PublishDwg(seApplication As SolidEdgeFramework.Application,
-                               options As DraftPublishOptions) As Boolean
+                               options As DraftPublishOptions,
+                               Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                               Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
         Dim seDocuments As SolidEdgeFramework.Documents = Nothing
         Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
+        Dim dftFiles = Directory.GetFiles(options.InputDirectory, "*.dft")
+        Dim processed As Integer = 0
 
         Try
             seDocuments = seApplication.Documents
 
-            For Each dftPath As String In Directory.GetFiles(options.InputDirectory, "*.dft")
+            If progress IsNot Nothing Then
+                progress(0, dftFiles.Length, "")
+            End If
+
+            For Each dftPath As String In dftFiles
+                If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                    Return False
+                End If
+
                 objDraft = seDocuments.Open(dftPath)
 
                 Dim outDWGFilePath = Path.Combine(Path.GetDirectoryName(dftPath),
@@ -61,6 +91,12 @@ Public Class DraftPublishService
 
                 objDraft.Close()
                 SolidEdgeSessionHelpers.ReleaseCOMReference(objDraft)
+                objDraft = Nothing
+                processed += 1
+
+                If progress IsNot Nothing Then
+                    progress(processed, dftFiles.Length, dftPath)
+                End If
             Next
         Finally
             SolidEdgeSessionHelpers.ReleaseCOMReference(seDocuments)

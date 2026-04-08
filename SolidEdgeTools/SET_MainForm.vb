@@ -9,6 +9,10 @@ Public Class SET_MainForm
 
     Private ReadOnly _configurationEngine As New ConfigurationEngine()
     Private ReadOnly _workflowService As New SolidEdgeWorkflowService()
+    Private _currentOperationName As String = ""
+    Private _lastAssemblyPath As String = ""
+    Private _lastDraftFolderPath As String = ""
+    Private _cancelRequested As Boolean = False
 
 
 #Region "====[ Generate BOM ]===="
@@ -90,6 +94,7 @@ Public Class SET_MainForm
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
                 If PropBom Then
                     sfdSelectXLSFile.FileName = "Lista_Proprietà_" + Path.GetFileNameWithoutExtension(ofdSelectASMFile.FileName)
                 Else
@@ -1091,11 +1096,15 @@ Public Class SET_MainForm
         Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale),
                                                        AddressOf DisplayException)
 
-        Return _workflowService.ExecuteWithAssembly(
-            asmFilePath,
-            GetApplicationOptions(),
-            False,
-            Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions))
+        Return ExecuteWithProgress(
+            "Generazione DFT",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions, progress, AddressOf IsCancellationRequested))
+            End Function)
 
     End Function
 
@@ -1367,8 +1376,12 @@ Public Class SET_MainForm
     Private Sub btnGenerateDisegniDiPiega_Click(sender As System.Object, e As System.EventArgs) Handles btnGenerateDisegniDiPiega.Click
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                GenerateDisegniDiPiega_Execute(ofdSelectASMFile.FileName)
-                MessageBox.Show(Me, "Generazione Disegni di Piega completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+                If GenerateDisegniDiPiega_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Generazione Disegni di Piega completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Generazione Disegni di Piega interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1387,18 +1400,26 @@ Public Class SET_MainForm
                                                       AddressOf ExportSheetMetalDocumentDocument,
                                                       AddressOf DisplayException)
 
-        Return _workflowService.ExecuteWithAssembly(
-            asmFilePath,
-            GetApplicationOptions(),
-            False,
-            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
+        Return ExecuteWithProgress(
+            String.Format("Esportazione {0}", type.ToUpperInvariant()),
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions, progress, AddressOf IsCancellationRequested))
+            End Function)
     End Function
 
     Private Sub btnExportSTL_Click(sender As System.Object, e As System.EventArgs) Handles btnExportSTL.Click
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                Export_Execute(ofdSelectASMFile.FileName, "stl")
-                MessageBox.Show(Me, "Esportazione in STL (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+                If Export_Execute(ofdSelectASMFile.FileName, "stl") Then
+                    MessageBox.Show(Me, "Esportazione in STL (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Esportazione in STL (PAR/PSM) interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1410,8 +1431,12 @@ Public Class SET_MainForm
     Private Sub btnExportSTP_Click(sender As Object, e As EventArgs) Handles btnExportSTP.Click
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                Export_Execute(ofdSelectASMFile.FileName, "stp")
-                MessageBox.Show(Me, "Esportazione in STP (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+                If Export_Execute(ofdSelectASMFile.FileName, "stp") Then
+                    MessageBox.Show(Me, "Esportazione in STP (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Esportazione in STP (PAR/PSM) interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1429,11 +1454,15 @@ Public Class SET_MainForm
         Dim exportService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
                                                       AddressOf DisplayException)
 
-        Return _workflowService.ExecuteWithAssembly(
-            asmFilePath,
-            GetApplicationOptions(),
-            False,
-            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
+        Return ExecuteWithProgress(
+            "Esportazione DXF",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions, progress, AddressOf IsCancellationRequested))
+            End Function)
 
     End Function
 
@@ -1441,8 +1470,12 @@ Public Class SET_MainForm
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                ExportDXF_Execute(ofdSelectASMFile.FileName)
-                MessageBox.Show(Me, "Esportazione in DXF (PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+                If ExportDXF_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Esportazione in DXF (PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Esportazione in DXF (PSM) interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1457,9 +1490,14 @@ Public Class SET_MainForm
 
     Private Sub btnConvertDisegniDiPiegaToPdf_Click(sender As System.Object, e As System.EventArgs) Handles btnConvertDisegniDiPiegaToPdf.Click
         Try
+            PrepareDraftFolderDialog()
             If fbdSelectDisegniDiPiegaFolder.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                ConvertDisegniDiPiegaToPdf_Execute(fbdSelectDisegniDiPiegaFolder.SelectedPath)
-                MessageBox.Show(Me, "Conversione PDF completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberDraftFolderPath(fbdSelectDisegniDiPiegaFolder.SelectedPath)
+                If ConvertDisegniDiPiegaToPdf_Execute(fbdSelectDisegniDiPiegaFolder.SelectedPath) Then
+                    MessageBox.Show(Me, "Conversione PDF completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Conversione PDF interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1472,12 +1510,15 @@ Public Class SET_MainForm
         Dim publishService As New DraftPublishService()
         Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
-        Return _workflowService.ExecuteWithApplication(
-            GetApplicationOptions(),
-            False,
-            Function(app)
-                publishService.PublishPdf(app, publishOptions)
-                Return True
+        Return ExecuteWithProgress(
+            "Conversione PDF",
+            Function(progress)
+                Return _workflowService.ExecuteWithApplication(
+                    GetApplicationOptions(),
+                    False,
+                    Function(app)
+                        Return publishService.PublishPdf(app, publishOptions, progress, AddressOf IsCancellationRequested)
+                    End Function)
             End Function)
 
     End Function
@@ -1487,12 +1528,15 @@ Public Class SET_MainForm
         Dim publishService As New DraftPublishService()
         Dim publishOptions = GetDraftPublishOptions(inputDFTDirectory)
 
-        Return _workflowService.ExecuteWithApplication(
-            GetApplicationOptions(),
-            False,
-            Function(app)
-                publishService.PublishDwg(app, publishOptions)
-                Return True
+        Return ExecuteWithProgress(
+            "Conversione DWG",
+            Function(progress)
+                Return _workflowService.ExecuteWithApplication(
+                    GetApplicationOptions(),
+                    False,
+                    Function(app)
+                        Return publishService.PublishDwg(app, publishOptions, progress, AddressOf IsCancellationRequested)
+                    End Function)
             End Function)
 
     End Function
@@ -1535,6 +1579,122 @@ Public Class SET_MainForm
         End If
 
         lblVersion.Text = String.Format("Versione {0}", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString())
+        lblProgress.Text = "Pronto."
+        progressOperations.Minimum = 0
+        progressOperations.Value = 0
+        btnCancelOperation.Enabled = False
+    End Sub
+
+    Private Function ExecuteWithProgress(operationName As String,
+                                         work As Func(Of Action(Of Integer, Integer, String), Boolean)) As Boolean
+
+        BeginProgress(operationName)
+
+        Try
+            Return work(AddressOf ReportProgress)
+        Finally
+            EndProgress()
+        End Try
+    End Function
+
+    Private Sub BeginProgress(operationName As String)
+        _currentOperationName = operationName
+        _cancelRequested = False
+        progressOperations.Style = ProgressBarStyle.Marquee
+        progressOperations.MarqueeAnimationSpeed = 30
+        progressOperations.Value = 0
+        lblProgress.Text = String.Format("{0}: preparazione...", operationName)
+        UseWaitCursor = True
+        btnCancelOperation.Enabled = True
+        RefreshProgressUI()
+    End Sub
+
+    Private Sub ReportProgress(processed As Integer,
+                               total As Integer,
+                               currentFilePath As String)
+
+        progressOperations.Style = ProgressBarStyle.Continuous
+        progressOperations.MarqueeAnimationSpeed = 0
+        progressOperations.Maximum = Math.Max(1, total)
+        progressOperations.Value = Math.Min(processed, progressOperations.Maximum)
+
+        If total <= 0 Then
+            lblProgress.Text = String.Format("{0}: nessun file da processare.", _currentOperationName)
+        ElseIf processed <= 0 Then
+            lblProgress.Text = String.Format("{0}: 0/{1}", _currentOperationName, total)
+        Else
+            lblProgress.Text = String.Format("{0}: {1}/{2} - {3}",
+                                             _currentOperationName,
+                                             processed,
+                                             total,
+                                             Path.GetFileName(currentFilePath))
+        End If
+
+        RefreshProgressUI()
+    End Sub
+
+    Private Sub EndProgress()
+        UseWaitCursor = False
+        progressOperations.Style = ProgressBarStyle.Continuous
+        progressOperations.MarqueeAnimationSpeed = 0
+        progressOperations.Value = 0
+        lblProgress.Text = "Pronto."
+        _currentOperationName = ""
+        btnCancelOperation.Enabled = False
+        RefreshProgressUI()
+    End Sub
+
+    Private Sub RefreshProgressUI()
+        lblProgress.Refresh()
+        progressOperations.Refresh()
+        btnCancelOperation.Refresh()
+        Me.Refresh()
+        Application.DoEvents()
+    End Sub
+
+    Private Function IsCancellationRequested() As Boolean
+        Return _cancelRequested
+    End Function
+
+    Private Sub btnCancelOperation_Click(sender As Object, e As EventArgs) Handles btnCancelOperation.Click
+        _cancelRequested = True
+        lblProgress.Text = String.Format("{0}: interruzione richiesta...", _currentOperationName)
+        btnCancelOperation.Enabled = False
+        RefreshProgressUI()
+    End Sub
+
+    Private Sub RememberAssemblyPath(asmFilePath As String)
+        If Not String.IsNullOrWhiteSpace(asmFilePath) AndAlso File.Exists(asmFilePath) Then
+            _lastAssemblyPath = asmFilePath
+            ofdSelectASMFile.InitialDirectory = Path.GetDirectoryName(asmFilePath)
+        End If
+    End Sub
+
+    Private Sub RememberDraftFolderPath(folderPath As String)
+        If Not String.IsNullOrWhiteSpace(folderPath) AndAlso Directory.Exists(folderPath) Then
+            _lastDraftFolderPath = folderPath
+        End If
+    End Sub
+
+    Private Sub PrepareDraftFolderDialog()
+        Dim defaultFolderPath As String = Nothing
+
+        If Not String.IsNullOrWhiteSpace(_lastDraftFolderPath) AndAlso Directory.Exists(_lastDraftFolderPath) Then
+            defaultFolderPath = _lastDraftFolderPath
+        ElseIf Not String.IsNullOrWhiteSpace(_lastAssemblyPath) AndAlso File.Exists(_lastAssemblyPath) Then
+            Dim assemblyDirectory = Path.GetDirectoryName(_lastAssemblyPath)
+            Dim draftDirectory = Path.Combine(assemblyDirectory, "Disegni di Piega")
+
+            If Directory.Exists(draftDirectory) Then
+                defaultFolderPath = draftDirectory
+            ElseIf Directory.Exists(assemblyDirectory) Then
+                defaultFolderPath = assemblyDirectory
+            End If
+        End If
+
+        If Not String.IsNullOrWhiteSpace(defaultFolderPath) Then
+            fbdSelectDisegniDiPiegaFolder.SelectedPath = defaultFolderPath
+        End If
     End Sub
 
     Private Sub bntPropBOM_Click(sender As Object, e As EventArgs) Handles bntPropBOM.Click
@@ -1549,8 +1709,12 @@ Public Class SET_MainForm
 
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                ExportJPG_Execute(ofdSelectASMFile.FileName)
-                MessageBox.Show(Me, "Esportazione in JPG (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+                If ExportJPG_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Esportazione in JPG (PAR/PSM) completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Esportazione in JPG (PAR/PSM) interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception
@@ -1564,11 +1728,15 @@ Public Class SET_MainForm
         Dim exportService As New ImageExportService(AddressOf ExportModelDocumentImage,
                                                     AddressOf DisplayException)
 
-        Return _workflowService.ExecuteWithAssembly(
-            asmFilePath,
-            GetApplicationOptions(),
-            False,
-            Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions))
+        Return ExecuteWithProgress(
+            "Esportazione JPG",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) exportService.ExportAssembly(app, assembly, exportOptions, progress))
+            End Function)
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click
@@ -1636,9 +1804,14 @@ Public Class SET_MainForm
 
     Private Sub btnConvertDisegniDiPiegaToDWG_Click(sender As Object, e As EventArgs) Handles btnConvertDisegniDiPiegaToDWG.Click
         Try
+            PrepareDraftFolderDialog()
             If fbdSelectDisegniDiPiegaFolder.ShowDialog() = Windows.Forms.DialogResult.OK Then
-                ConvertDisegniDiPiegaToDWG_Execute(fbdSelectDisegniDiPiegaFolder.SelectedPath)
-                MessageBox.Show(Me, "Conversione DWG completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                RememberDraftFolderPath(fbdSelectDisegniDiPiegaFolder.SelectedPath)
+                If ConvertDisegniDiPiegaToDWG_Execute(fbdSelectDisegniDiPiegaFolder.SelectedPath) Then
+                    MessageBox.Show(Me, "Conversione DWG completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Else
+                    MessageBox.Show(Me, "Conversione DWG interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
             End If
 
         Catch exception As Exception

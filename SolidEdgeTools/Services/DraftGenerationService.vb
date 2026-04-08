@@ -16,11 +16,43 @@ Public Class DraftGenerationService
 
     Public Function GenerateForAssembly(seApplication As SolidEdgeFramework.Application,
                                         assembly As SolidEdgeAssembly.AssemblyDocument,
-                                        options As DraftGenerationOptions) As Boolean
+                                        options As DraftGenerationOptions,
+                                        Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                                        Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
-        Dim processedFiles As New Dictionary(Of String, Integer)
+        Dim targetFiles = GetTargetFiles(assembly, options)
+        Dim processed As Integer = 0
 
-        Return _occurrenceWalker.Walk(
+        If progress IsNot Nothing Then
+            progress(0, targetFiles.Count, "")
+        End If
+
+        For Each occurrenceFileName In targetFiles
+            If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                Return False
+            End If
+
+            If Not ExportFile(seApplication, assembly.Path, options, occurrenceFileName) Then
+                Return False
+            End If
+
+            processed += 1
+
+            If progress IsNot Nothing Then
+                progress(processed, targetFiles.Count, occurrenceFileName)
+            End If
+        Next
+
+        Return True
+    End Function
+
+    Private Function GetTargetFiles(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                    options As DraftGenerationOptions) As List(Of String)
+
+        Dim targetFiles As New List(Of String)
+        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        _occurrenceWalker.Walk(
             assembly.Occurrences,
             True,
             Function(item)
@@ -28,7 +60,7 @@ Public Class DraftGenerationService
                     Return True
                 End If
 
-                Dim extension = Path.GetExtension(item.OccurrenceFileName)
+                Dim extension = Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant()
                 If extension <> ".psm" AndAlso extension <> ".par" Then
                     Return True
                 End If
@@ -37,27 +69,26 @@ Public Class DraftGenerationService
                     Return True
                 End If
 
-                Return ExportFile(seApplication, processedFiles, assembly.Path, options, item.OccurrenceFileName)
+                If uniqueFiles.Add(item.OccurrenceFileName) Then
+                    targetFiles.Add(item.OccurrenceFileName)
+                End If
+
+                Return True
             End Function)
+
+        Return targetFiles
     End Function
 
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
-                                processedFiles As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
                                 options As DraftGenerationOptions,
                                 occurrenceFileName As String) As Boolean
-
-        If processedFiles.ContainsKey(occurrenceFileName) Then
-            Return True
-        End If
 
         Do While True
             Try
                 _draftExporter(seApplication,
                                BuildOutputPath(rootAssemblyPath, options.Prefix, occurrenceFileName),
                                occurrenceFileName)
-
-                processedFiles.Add(occurrenceFileName, 0)
                 Return True
             Catch ex As Exception
                 Select Case _errorHandler(ex,

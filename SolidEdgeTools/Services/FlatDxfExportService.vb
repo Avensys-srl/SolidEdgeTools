@@ -16,11 +16,43 @@ Public Class FlatDxfExportService
 
     Public Function ExportAssembly(seApplication As SolidEdgeFramework.Application,
                                    assembly As SolidEdgeAssembly.AssemblyDocument,
-                                   options As FlatDxfExportOptions) As Boolean
+                                   options As FlatDxfExportOptions,
+                                   Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                                   Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
-        Dim occurrenceFileNames As New Dictionary(Of String, Integer)
+        Dim targetFiles = GetTargetFiles(assembly, options)
+        Dim processed As Integer = 0
 
-        Return _occurrenceWalker.Walk(
+        If progress IsNot Nothing Then
+            progress(0, targetFiles.Count, "")
+        End If
+
+        For Each occurrenceFileName In targetFiles
+            If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                Return False
+            End If
+
+            If Not ExportFile(seApplication, assembly.Path, options, occurrenceFileName) Then
+                Return False
+            End If
+
+            processed += 1
+
+            If progress IsNot Nothing Then
+                progress(processed, targetFiles.Count, occurrenceFileName)
+            End If
+        Next
+
+        Return True
+    End Function
+
+    Private Function GetTargetFiles(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                    options As FlatDxfExportOptions) As List(Of String)
+
+        Dim targetFiles As New List(Of String)
+        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        _occurrenceWalker.Walk(
             assembly.Occurrences,
             options.IncludeSubAssemblies,
             Function(item)
@@ -28,7 +60,7 @@ Public Class FlatDxfExportService
                     Return True
                 End If
 
-                If Path.GetExtension(item.OccurrenceFileName) <> ".psm" Then
+                If Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant() <> ".psm" Then
                     Return True
                 End If
 
@@ -36,19 +68,20 @@ Public Class FlatDxfExportService
                     Return True
                 End If
 
-                Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName)
+                If uniqueFiles.Add(item.OccurrenceFileName) Then
+                    targetFiles.Add(item.OccurrenceFileName)
+                End If
+
+                Return True
             End Function)
+
+        Return targetFiles
     End Function
 
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
-                                occurrenceFileNames As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
                                 options As FlatDxfExportOptions,
                                 occurrenceFileName As String) As Boolean
-
-        If occurrenceFileNames.ContainsKey(occurrenceFileName) Then
-            Return True
-        End If
 
         Do While True
             Try
@@ -57,8 +90,6 @@ Public Class FlatDxfExportService
                              Path.Combine(rootAssemblyPath,
                                           "dxf",
                                           options.Prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), "dxf")))
-
-                occurrenceFileNames.Add(occurrenceFileName, 0)
                 Return True
             Catch ex As Exception
                 Select Case _errorHandler(ex,

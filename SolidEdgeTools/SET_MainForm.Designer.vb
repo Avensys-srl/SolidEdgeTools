@@ -55,6 +55,9 @@ Partial Class SET_MainForm
         Me.btnExportSTP = New System.Windows.Forms.Button()
         Me.btnConvertDisegniDiPiegaToDWG = New System.Windows.Forms.Button()
         Me.lblVersion = New System.Windows.Forms.Label()
+        Me.lblProgress = New System.Windows.Forms.Label()
+        Me.progressOperations = New System.Windows.Forms.ProgressBar()
+        Me.btnCancelOperation = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'btnPropTable
@@ -332,12 +335,41 @@ Partial Class SET_MainForm
         Me.lblVersion.Text = "Versione 1.0.0.0"
         Me.lblVersion.TextAlign = System.Drawing.ContentAlignment.TopRight
         '
+        'lblProgress
+        '
+        Me.lblProgress.AutoSize = False
+        Me.lblProgress.Location = New System.Drawing.Point(12, 249)
+        Me.lblProgress.Name = "lblProgress"
+        Me.lblProgress.Size = New System.Drawing.Size(660, 13)
+        Me.lblProgress.TabIndex = 17
+        Me.lblProgress.Text = "Pronto."
+        '
+        'progressOperations
+        '
+        Me.progressOperations.Location = New System.Drawing.Point(12, 265)
+        Me.progressOperations.Name = "progressOperations"
+        Me.progressOperations.Size = New System.Drawing.Size(561, 12)
+        Me.progressOperations.TabIndex = 18
+        '
+        'btnCancelOperation
+        '
+        Me.btnCancelOperation.Enabled = False
+        Me.btnCancelOperation.Location = New System.Drawing.Point(579, 259)
+        Me.btnCancelOperation.Name = "btnCancelOperation"
+        Me.btnCancelOperation.Size = New System.Drawing.Size(93, 23)
+        Me.btnCancelOperation.TabIndex = 19
+        Me.btnCancelOperation.Text = "Interrompi"
+        Me.btnCancelOperation.UseVisualStyleBackColor = True
+        '
         'SET_MainForm
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.SystemColors.Control
-        Me.ClientSize = New System.Drawing.Size(684, 255)
+        Me.ClientSize = New System.Drawing.Size(684, 289)
+        Me.Controls.Add(Me.btnCancelOperation)
+        Me.Controls.Add(Me.progressOperations)
+        Me.Controls.Add(Me.lblProgress)
         Me.Controls.Add(Me.btnExportSTP)
         Me.Controls.Add(Me.lblVersion)
         Me.Controls.Add(Me.txtScale)
@@ -367,8 +399,8 @@ Partial Class SET_MainForm
         Me.Controls.Add(Me.btnGenerateBOMSupplier)
         Me.Controls.Add(Me.btnPropTable)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
-        Me.MaximumSize = New System.Drawing.Size(700, 294)
-        Me.MinimumSize = New System.Drawing.Size(700, 294)
+        Me.MaximumSize = New System.Drawing.Size(700, 328)
+        Me.MinimumSize = New System.Drawing.Size(700, 328)
         Me.Name = "SET_MainForm"
         Me.Text = "SolidEdgeTools"
         Me.ResumeLayout(False)
@@ -407,4 +439,7 @@ Partial Class SET_MainForm
     Friend WithEvents btnExportSTP As Button
     Friend WithEvents btnConvertDisegniDiPiegaToDWG As Button
     Friend WithEvents lblVersion As Label
+    Friend WithEvents lblProgress As Label
+    Friend WithEvents progressOperations As ProgressBar
+    Friend WithEvents btnCancelOperation As Button
 End Class

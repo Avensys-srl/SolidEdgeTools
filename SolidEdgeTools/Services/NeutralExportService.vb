@@ -19,11 +19,56 @@ Public Class NeutralExportService
 
     Public Function ExportAssembly(seApplication As SolidEdgeFramework.Application,
                                    assembly As SolidEdgeAssembly.AssemblyDocument,
-                                   options As NeutralExportOptions) As Boolean
+                                   options As NeutralExportOptions,
+                                   Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                                   Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
-        Dim occurrenceFileNames As New Dictionary(Of String, Integer)
+        Dim targetFiles = GetTargetFiles(assembly, options)
+        Dim processed As Integer = 0
 
-        Return _occurrenceWalker.Walk(
+        If progress IsNot Nothing Then
+            progress(0, targetFiles.Count, "")
+        End If
+
+        For Each occurrenceFileName In targetFiles
+            If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                Return False
+            End If
+
+            Dim exporter As Action(Of SolidEdgeFramework.Application, String, String) = Nothing
+            Dim extension = Path.GetExtension(occurrenceFileName).ToLowerInvariant()
+
+            If extension = ".par" Then
+                exporter = _partExporter
+            ElseIf extension = ".psm" Then
+                exporter = _sheetMetalExporter
+            End If
+
+            If exporter Is Nothing Then
+                Continue For
+            End If
+
+            If Not ExportFile(seApplication, assembly.Path, options, occurrenceFileName, exporter) Then
+                Return False
+            End If
+
+            processed += 1
+
+            If progress IsNot Nothing Then
+                progress(processed, targetFiles.Count, occurrenceFileName)
+            End If
+        Next
+
+        Return True
+    End Function
+
+    Private Function GetTargetFiles(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                    options As NeutralExportOptions) As List(Of String)
+
+        Dim targetFiles As New List(Of String)
+        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        _occurrenceWalker.Walk(
             assembly.Occurrences,
             True,
             Function(item)
@@ -31,32 +76,30 @@ Public Class NeutralExportService
                     Return True
                 End If
 
+                Dim extension = Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant()
+                If extension <> ".par" AndAlso extension <> ".psm" Then
+                    Return True
+                End If
+
                 If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
                     Return True
                 End If
 
-                If Path.GetExtension(item.OccurrenceFileName) = ".par" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName, _partExporter)
-                End If
-
-                If Path.GetExtension(item.OccurrenceFileName) = ".psm" Then
-                    Return ExportFile(seApplication, occurrenceFileNames, assembly.Path, options, item.OccurrenceFileName, _sheetMetalExporter)
+                If uniqueFiles.Add(item.OccurrenceFileName) Then
+                    targetFiles.Add(item.OccurrenceFileName)
                 End If
 
                 Return True
             End Function)
+
+        Return targetFiles
     End Function
 
     Private Function ExportFile(seApplication As SolidEdgeFramework.Application,
-                                occurrenceFileNames As Dictionary(Of String, Integer),
                                 rootAssemblyPath As String,
                                 options As NeutralExportOptions,
                                 occurrenceFileName As String,
                                 exporter As Action(Of SolidEdgeFramework.Application, String, String)) As Boolean
-
-        If occurrenceFileNames.ContainsKey(occurrenceFileName) Then
-            Return True
-        End If
 
         Do While True
             Try
@@ -65,8 +108,6 @@ Public Class NeutralExportService
                          Path.Combine(rootAssemblyPath,
                                       options.ExportType,
                                       options.Prefix & Path.ChangeExtension(Path.GetFileName(occurrenceFileName), options.ExportType)))
-
-                occurrenceFileNames.Add(occurrenceFileName, 0)
                 Return True
             Catch ex As Exception
                 Select Case _errorHandler(ex,
