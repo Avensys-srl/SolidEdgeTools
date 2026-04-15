@@ -1123,6 +1123,12 @@ Public Class SET_MainForm
         Dim objIsoView As SolidEdgeDraft.DrawingView = Nothing
 
         Try
+            If Path.GetExtension(modelLinkPath).Equals(".psm", StringComparison.OrdinalIgnoreCase) Then
+                If TryReuseArchivedSheetMetalDraft(seApplication, outputDFTFilePath, modelLinkPath) Then
+                    Return
+                End If
+            End If
+
             objDocuments = seApplication.Documents
             CreateDraftDocumentContext(objDocuments,
                                        modelLinkPath,
@@ -1233,6 +1239,145 @@ Public Class SET_MainForm
             ReleaseCOMReference(objDrawingView)
         End Try
     End Sub
+
+    Private Function TryReuseArchivedSheetMetalDraft(seApplication As SolidEdgeFramework.Application,
+                                                     outputDFTFilePath As String,
+                                                     modelLinkPath As String) As Boolean
+
+        Dim archivedDraftPath As String = Nothing
+        Dim objDocuments As SolidEdgeFramework.Documents = Nothing
+        Dim objDraft As SolidEdgeDraft.DraftDocument = Nothing
+        Dim objModelLinks As SolidEdgeDraft.ModelLinks = Nothing
+        Dim objModelLink As SolidEdgeDraft.ModelLink = Nothing
+        Dim reused As Boolean = False
+
+        Try
+            archivedDraftPath = FindMostRecentArchivedDraft(outputDFTFilePath)
+
+            If String.IsNullOrWhiteSpace(archivedDraftPath) OrElse Not File.Exists(archivedDraftPath) Then
+                Return False
+            End If
+
+            If Not Directory.Exists(Path.GetDirectoryName(outputDFTFilePath)) Then
+                Directory.CreateDirectory(Path.GetDirectoryName(outputDFTFilePath))
+            End If
+
+            If File.Exists(outputDFTFilePath) Then
+                File.Delete(outputDFTFilePath)
+            End If
+
+            File.Copy(archivedDraftPath, outputDFTFilePath, True)
+
+            objDocuments = seApplication.Documents
+            objDraft = CType(objDocuments.Open(outputDFTFilePath), SolidEdgeDraft.DraftDocument)
+            objModelLinks = objDraft.ModelLinks
+
+            If objModelLinks Is Nothing OrElse objModelLinks.Count = 0 Then
+                Return False
+            End If
+
+            For index As Integer = 1 To objModelLinks.Count
+                objModelLink = objModelLinks.Item(index)
+
+                If ShouldReuseArchivedModelLink(objModelLink, modelLinkPath, objModelLinks.Count) Then
+                    objModelLink.ChangeSource(modelLinkPath)
+
+                    Try
+                        objModelLink.ForceUpdateViews()
+                    Catch
+                        objModelLink.UpdateViews()
+                    End Try
+
+                    reused = True
+                End If
+
+                ReleaseCOMReference(objModelLink)
+                objModelLink = Nothing
+            Next
+
+            If Not reused Then
+                Return False
+            End If
+
+            objDraft.Save()
+            objDraft.Close()
+            Return True
+        Catch
+            Return False
+        Finally
+            Try
+                If objDraft IsNot Nothing Then
+                    objDraft.Close()
+                End If
+            Catch
+            End Try
+
+            If Not reused AndAlso File.Exists(outputDFTFilePath) Then
+                Try
+                    File.Delete(outputDFTFilePath)
+                Catch
+                End Try
+            End If
+
+            ReleaseCOMReference(objModelLink)
+            ReleaseCOMReference(objModelLinks)
+            ReleaseCOMReference(objDraft)
+            ReleaseCOMReference(objDocuments)
+        End Try
+    End Function
+
+    Private Function FindMostRecentArchivedDraft(outputDFTFilePath As String) As String
+        Dim outputFolder = Path.GetDirectoryName(outputDFTFilePath)
+        Dim folderParent = Path.GetDirectoryName(outputFolder)
+        Dim folderName = Path.GetFileName(outputFolder)
+        Dim draftFileName = Path.GetFileName(outputDFTFilePath)
+        Dim archivedFolders As String()
+
+        If String.IsNullOrWhiteSpace(outputFolder) OrElse String.IsNullOrWhiteSpace(folderParent) OrElse String.IsNullOrWhiteSpace(folderName) Then
+            Return Nothing
+        End If
+
+        If Not Directory.Exists(folderParent) Then
+            Return Nothing
+        End If
+
+        archivedFolders = Directory.GetDirectories(folderParent, folderName & "_old*")
+
+        If archivedFolders Is Nothing OrElse archivedFolders.Length = 0 Then
+            Return Nothing
+        End If
+
+        For Each archivedFolder In archivedFolders.OrderByDescending(Function(path) Directory.GetLastWriteTimeUtc(path))
+            Dim archivedDraftPath = Path.Combine(archivedFolder, draftFileName)
+
+            If File.Exists(archivedDraftPath) Then
+                Return archivedDraftPath
+            End If
+        Next
+
+        Return Nothing
+    End Function
+
+    Private Function ShouldReuseArchivedModelLink(modelLink As SolidEdgeDraft.ModelLink,
+                                                  modelLinkPath As String,
+                                                  modelLinkCount As Integer) As Boolean
+
+        If modelLink Is Nothing Then
+            Return False
+        End If
+
+        If modelLinkCount = 1 Then
+            Return True
+        End If
+
+        Dim existingFileName = Path.GetFileNameWithoutExtension(modelLink.FileName)
+        Dim targetFileName = Path.GetFileNameWithoutExtension(modelLinkPath)
+        Dim existingExtension = Path.GetExtension(modelLink.FileName)
+        Dim targetExtension = Path.GetExtension(modelLinkPath)
+
+        Return existingFileName.Equals(targetFileName, StringComparison.OrdinalIgnoreCase) AndAlso
+               existingExtension.Equals(targetExtension, StringComparison.OrdinalIgnoreCase)
+    End Function
 
     Private Sub CreateDraftDocumentContext(objDocuments As SolidEdgeFramework.Documents,
                                            modelLinkPath As String,
