@@ -458,9 +458,8 @@ Codex should:
 
 ### In Progress
 
-- typed workflow/configuration mapping
 - validation and geometry planning scaffolding
-- optional automatic `.psm` DFT layout
+- early template-driven geometry scaffolding
 
 ### Not Started / Not Yet Production-Ready
 
@@ -483,19 +482,24 @@ Current intent:
 
 Current implementation state:
 
-- works as an optional mode driven by UI flag
+- works in production as an optional mode driven by UI flag
 - UI default is now enabled
 - uses measured drawing-view extents rather than only fixed scale assumptions
-- now produces non-legacy, non-duplicate layouts on real test parts
+- preserves the legacy projection relationship: one base view plus derived orthographic views and one isometric
+- repositions the generated group to occupy the useful A2 sheet area without overlapping the title block
 - still needs visual tuning for flat/degenerate edge-on cases
 
 Important limitation:
 
 - very thin sheet metal parts can still produce orthographic views that visually collapse to near-lines; this is a geometry/orientation reality, not necessarily a fallback defect
 
+Current related capability:
+
+- when a previous `Disegni di Piega_old` folder exists, the tool can already locate the nearest previous DFT for the same part, relink/update the model view silently, and preserve existing dimensions/annotations where possible
+
 Potential next improvement:
 
-- when a previous `Disegni di Piega_old` folder exists, locate the nearest previous DFT for the same part, relink/update the model view silently, preserve existing dimensions/annotations where possible, and only adjust scale/layout if the updated geometry no longer fits cleanly
+- after reusing a previous `Disegni di Piega_old` draft, detect whether the updated geometry now needs a scale/layout correction and adjust only when necessary
 
 Additional workflow candidate:
 

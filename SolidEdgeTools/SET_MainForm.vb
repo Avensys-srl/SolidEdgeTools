@@ -1500,29 +1500,20 @@ Public Class SET_MainForm
                 sheetCenterY,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
 
-            topView = drawingViews.AddSheetMetalView(
-                modelLink,
-                viewPlan.TopOrientation,
-                viewPlan.FinalScale,
-                sheetCenterX,
-                sheetCenterY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            rightView = drawingViews.AddByFold(frontView,
+                                               SolidEdgeDraft.FoldTypeConstants.igFoldRight,
+                                               sheetCenterX,
+                                               sheetCenterY)
 
-            rightView = drawingViews.AddSheetMetalView(
-                modelLink,
-                viewPlan.SideOrientation,
-                viewPlan.FinalScale,
-                sheetCenterX,
-                sheetCenterY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            topView = drawingViews.AddByFold(frontView,
+                                             SolidEdgeDraft.FoldTypeConstants.igFoldDown,
+                                             sheetCenterX,
+                                             sheetCenterY)
 
-            isoView = drawingViews.AddSheetMetalView(
-                modelLink,
-                SolidEdgeDraft.ViewOrientationConstants.igTrimetricTopFrontRightView,
-                viewPlan.FinalScale,
-                sheetCenterX,
-                sheetCenterY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            isoView = drawingViews.AddByFold(frontView,
+                                             SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
+                                             sheetCenterX,
+                                             sheetCenterY)
 
             ApplyAutoLayoutToSheetMetalViews(sheetSetup,
                                              sheetCenterX,
@@ -1592,29 +1583,20 @@ Public Class SET_MainForm
                 centerY,
                 SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
 
-            tempTopView = tempDrawingViews.AddSheetMetalView(
-                tempModelLink,
-                viewPlan.TopOrientation,
-                seedScale,
-                centerX,
-                centerY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            tempRightView = tempDrawingViews.AddByFold(tempFrontView,
+                                                       SolidEdgeDraft.FoldTypeConstants.igFoldRight,
+                                                       centerX,
+                                                       centerY)
 
-            tempRightView = tempDrawingViews.AddSheetMetalView(
-                tempModelLink,
-                viewPlan.SideOrientation,
-                seedScale,
-                centerX,
-                centerY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            tempTopView = tempDrawingViews.AddByFold(tempFrontView,
+                                                     SolidEdgeDraft.FoldTypeConstants.igFoldDown,
+                                                     centerX,
+                                                     centerY)
 
-            tempIsoView = tempDrawingViews.AddSheetMetalView(
-                tempModelLink,
-                SolidEdgeDraft.ViewOrientationConstants.igTrimetricTopFrontRightView,
-                seedScale,
-                centerX,
-                centerY,
-                SolidEdgeDraft.SheetMetalDrawingViewTypeConstants.seSheetMetalDesignedView)
+            tempIsoView = tempDrawingViews.AddByFold(tempFrontView,
+                                                     SolidEdgeDraft.FoldTypeConstants.igFoldDownRight,
+                                                     centerX,
+                                                     centerY)
 
             infoMain = CreateViewLayoutInfo(tempFrontView, centerX, centerY)
             infoTop = CreateViewLayoutInfo(tempTopView, centerX, centerY)
@@ -1688,23 +1670,48 @@ Public Class SET_MainForm
 
         Dim usableWidth = CDbl(sheetSetup.SheetWidth) - CDbl(sheetSetup.LeftMargin) - CDbl(sheetSetup.RightMargin)
         Dim usableHeight = CDbl(sheetSetup.SheetHeight) - CDbl(sheetSetup.TopMargin) - CDbl(sheetSetup.BottomMargin)
-        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.02
-        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.025
+        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.004
+        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.006
         Dim layoutLeft As Double = CDbl(sheetSetup.LeftMargin) + outerMargin
-        Dim layoutBottom As Double = CDbl(sheetSetup.BottomMargin) + outerMargin
+        Dim titleBlockReservedHeight As Double = usableHeight * 0.07
+        Dim layoutBottom As Double = CDbl(sheetSetup.BottomMargin) + titleBlockReservedHeight + outerMargin
         Dim layoutWidth As Double = usableWidth - (outerMargin * 2)
-        Dim layoutHeight As Double = usableHeight - (outerMargin * 2)
-        Dim titleBlockReservedHeight As Double = layoutHeight * 0.18
-        Dim leftColumnWidthTarget As Double = layoutWidth * 0.68
+        Dim layoutHeight As Double = usableHeight - titleBlockReservedHeight - (outerMargin * 2)
+        Dim leftColumnWidthTarget As Double = layoutWidth * 0.67
         Dim rightColumnWidthTarget As Double = layoutWidth - leftColumnWidthTarget - gap
-        Dim topRowHeightTarget As Double = layoutHeight * 0.34
+        Dim topRowHeightTarget As Double = layoutHeight * 0.58
         Dim bottomRowHeightTarget As Double = layoutHeight - topRowHeightTarget - gap
-        Dim isoCellHeightTarget As Double = Math.Max(bottomRowHeightTarget - titleBlockReservedHeight - gap, layoutHeight * 0.22)
+        Dim isoCellHeightTarget As Double = bottomRowHeightTarget
+        Dim topTargetMinY As Double
+        Dim sideTargetMinX As Double
+        Dim isoTargetMinX As Double
+        Dim isoTargetMinY As Double
+        Dim targetGroupCenterX As Double
+        Dim targetGroupCenterY As Double
 
-        CenterDrawingViewInCell(views(0), layoutLeft, layoutBottom, leftColumnWidthTarget, bottomRowHeightTarget)
-        CenterDrawingViewInCell(views(1), layoutLeft, layoutBottom + bottomRowHeightTarget + gap, leftColumnWidthTarget, topRowHeightTarget)
-        CenterDrawingViewInCell(views(2), layoutLeft + leftColumnWidthTarget + gap, layoutBottom + bottomRowHeightTarget + gap, rightColumnWidthTarget, topRowHeightTarget)
-        CenterDrawingViewInCell(views(3), layoutLeft + leftColumnWidthTarget + gap, layoutBottom + titleBlockReservedHeight + gap, rightColumnWidthTarget, isoCellHeightTarget)
+        CenterDrawingViewInCell(views(0), layoutLeft, layoutBottom + bottomRowHeightTarget + gap, leftColumnWidthTarget, topRowHeightTarget)
+        RefreshViewLayoutInfo(views(0))
+        RefreshViewLayoutInfo(views(1))
+        RefreshViewLayoutInfo(views(2))
+        RefreshViewLayoutInfo(views(3))
+
+        topTargetMinY = layoutBottom + Math.Max(0, (bottomRowHeightTarget - views(1).Height) / 2)
+        MoveDrawingViewToLowerLeft(views(1),
+                                   views(0).MinX + Math.Max(0, (views(0).Width - views(1).Width) / 2),
+                                   topTargetMinY)
+
+        sideTargetMinX = layoutLeft + leftColumnWidthTarget + gap + Math.Max(0, (rightColumnWidthTarget - views(2).Width) / 2)
+        MoveDrawingViewToLowerLeft(views(2),
+                                   sideTargetMinX,
+                                   views(0).MinY + Math.Max(0, (views(0).Height - views(2).Height) / 2))
+
+        isoTargetMinX = layoutLeft + leftColumnWidthTarget + gap + Math.Max(0, (rightColumnWidthTarget - views(3).Width) / 2)
+        isoTargetMinY = layoutBottom + Math.Max(0, (isoCellHeightTarget - views(3).Height) / 2)
+        MoveDrawingViewToLowerLeft(views(3), isoTargetMinX, isoTargetMinY)
+
+        targetGroupCenterX = CDbl(sheetSetup.LeftMargin) + (usableWidth / 2)
+        targetGroupCenterY = layoutBottom + (layoutHeight / 2)
+        CenterViewGroup(views, targetGroupCenterX, targetGroupCenterY)
     End Sub
 
     Private Function CalculateAutoLayoutScaleFactor(sheetSetup As SolidEdgeDraft.SheetSetup,
@@ -1716,22 +1723,22 @@ Public Class SET_MainForm
 
         Dim usableWidth = CDbl(sheetSetup.SheetWidth) - CDbl(sheetSetup.LeftMargin) - CDbl(sheetSetup.RightMargin)
         Dim usableHeight = CDbl(sheetSetup.SheetHeight) - CDbl(sheetSetup.TopMargin) - CDbl(sheetSetup.BottomMargin)
-        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.02
-        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.025
+        Dim gap As Double = Math.Min(usableWidth, usableHeight) * 0.004
+        Dim outerMargin As Double = Math.Min(usableWidth, usableHeight) * 0.006
         Dim layoutWidth As Double = usableWidth - (outerMargin * 2)
-        Dim layoutHeight As Double = usableHeight - (outerMargin * 2)
-        Dim titleBlockReservedHeight As Double = layoutHeight * 0.16
-        Dim leftColumnWidthTarget As Double = layoutWidth * 0.68
+        Dim titleBlockReservedHeight As Double = usableHeight * 0.07
+        Dim layoutHeight As Double = usableHeight - titleBlockReservedHeight - (outerMargin * 2)
+        Dim leftColumnWidthTarget As Double = layoutWidth * 0.67
         Dim rightColumnWidthTarget As Double = layoutWidth - leftColumnWidthTarget - gap
-        Dim topRowHeightTarget As Double = layoutHeight * 0.34
+        Dim topRowHeightTarget As Double = layoutHeight * 0.58
         Dim bottomRowHeightTarget As Double = layoutHeight - topRowHeightTarget - gap
-        Dim isoCellHeightTarget As Double = Math.Max(bottomRowHeightTarget - titleBlockReservedHeight - gap, layoutHeight * 0.22)
+        Dim isoCellHeightTarget As Double = bottomRowHeightTarget
         Dim scaleFactor As Double = Double.MaxValue
 
-        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(mainView, leftColumnWidthTarget, bottomRowHeightTarget))
-        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(topView, leftColumnWidthTarget, topRowHeightTarget))
-        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(sideView, rightColumnWidthTarget, topRowHeightTarget))
-        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(isoView, rightColumnWidthTarget, isoCellHeightTarget))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(mainView, leftColumnWidthTarget, topRowHeightTarget, 0.999))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(topView, leftColumnWidthTarget, bottomRowHeightTarget, 0.997))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(sideView, rightColumnWidthTarget, topRowHeightTarget, 0.997))
+        scaleFactor = Math.Min(scaleFactor, GetCellScaleFactor(isoView, rightColumnWidthTarget, isoCellHeightTarget, 0.995))
 
         If Double.IsInfinity(scaleFactor) OrElse Double.IsNaN(scaleFactor) OrElse scaleFactor <= 0 Then
             Return 1.0
@@ -1837,15 +1844,63 @@ Public Class SET_MainForm
         MoveDrawingViewToLowerLeft(info, targetMinX, targetMinY)
     End Sub
 
+    Private Sub CenterViewGroup(views As IEnumerable(Of ViewLayoutInfo),
+                                targetCenterX As Double,
+                                targetCenterY As Double)
+
+        Dim groupMinX As Double = Double.MaxValue
+        Dim groupMinY As Double = Double.MaxValue
+        Dim groupMaxX As Double = Double.MinValue
+        Dim groupMaxY As Double = Double.MinValue
+        Dim groupCenterX As Double
+        Dim groupCenterY As Double
+        Dim deltaX As Double
+        Dim deltaY As Double
+
+        For Each info In views
+            If info Is Nothing OrElse info.View Is Nothing Then
+                Continue For
+            End If
+
+            RefreshViewLayoutInfo(info)
+            groupMinX = Math.Min(groupMinX, info.MinX)
+            groupMinY = Math.Min(groupMinY, info.MinY)
+            groupMaxX = Math.Max(groupMaxX, info.MaxX)
+            groupMaxY = Math.Max(groupMaxY, info.MaxY)
+        Next
+
+        If groupMinX = Double.MaxValue OrElse groupMinY = Double.MaxValue Then
+            Return
+        End If
+
+        groupCenterX = groupMinX + ((groupMaxX - groupMinX) / 2)
+        groupCenterY = groupMinY + ((groupMaxY - groupMinY) / 2)
+        deltaX = targetCenterX - groupCenterX
+        deltaY = targetCenterY - groupCenterY
+
+        For Each info In views
+            If info Is Nothing OrElse info.View Is Nothing Then
+                Continue For
+            End If
+
+            info.OriginX += deltaX
+            info.OriginY += deltaY
+            info.View.SetOrigin(info.OriginX, info.OriginY)
+            info.View.Update()
+            RefreshViewLayoutInfo(info)
+        Next
+    End Sub
+
     Private Function GetCellScaleFactor(info As ViewLayoutInfo,
                                         cellWidth As Double,
-                                        cellHeight As Double) As Double
+                                        cellHeight As Double,
+                                        Optional fillRatio As Double = 0.98) As Double
 
         If info Is Nothing OrElse info.Width <= 0 OrElse info.Height <= 0 Then
             Return 1.0
         End If
 
-        Return Math.Min((cellWidth * 0.98) / info.Width, (cellHeight * 0.98) / info.Height)
+        Return Math.Min((cellWidth * fillRatio) / info.Width, (cellHeight * fillRatio) / info.Height)
     End Function
 
     Private Function BuildSheetMetalAutoLayoutPlan(modelLink As SolidEdgeDraft.ModelLink) As SheetMetalAutoLayoutPlan
@@ -1859,24 +1914,18 @@ Public Class SET_MainForm
 
         If topArea >= frontArea AndAlso topArea >= rightArea Then
             Return New SheetMetalAutoLayoutPlan With {
-                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
-                .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-                .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView
+                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView
             }
         End If
 
         If rightArea >= frontArea AndAlso rightArea >= topArea Then
             Return New SheetMetalAutoLayoutPlan With {
-                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView,
-                .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
-                .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView
+                .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView
             }
         End If
 
         Return New SheetMetalAutoLayoutPlan With {
-            .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView,
-            .TopOrientation = SolidEdgeDraft.ViewOrientationConstants.igTopView,
-            .SideOrientation = SolidEdgeDraft.ViewOrientationConstants.igRightView
+            .MainOrientation = SolidEdgeDraft.ViewOrientationConstants.igFrontView
         }
     End Function
 
@@ -1915,8 +1964,6 @@ Public Class SET_MainForm
 
     Private Class SheetMetalAutoLayoutPlan
         Public Property MainOrientation As SolidEdgeDraft.ViewOrientationConstants
-        Public Property TopOrientation As SolidEdgeDraft.ViewOrientationConstants
-        Public Property SideOrientation As SolidEdgeDraft.ViewOrientationConstants
         Public Property FinalScale As Double
     End Class
 
