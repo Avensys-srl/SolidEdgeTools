@@ -2500,6 +2500,22 @@ Public Class SET_MainForm
         End Try
     End Sub
 
+    Private Sub btnCleanFolder_Click(sender As Object, e As EventArgs) Handles btnCleanFolder.Click
+        Try
+            If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+
+                If CleanFolder_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Clean Folder completato.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ElseIf _cancelRequested Then
+                    MessageBox.Show(Me, "Clean Folder interrotto.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
+            End If
+        Catch exception As Exception
+            DisplayException(exception)
+        End Try
+    End Sub
+
     Public Function ExportJPG_Execute(asmFilePath As String) As Boolean
         Dim exportOptions = GetImageExportOptions()
         Dim exportService As New ImageExportService(AddressOf ExportModelDocumentImage,
@@ -2573,7 +2589,7 @@ Public Class SET_MainForm
                     asmFilePath,
                     GetApplicationOptions(),
                     False,
-                    Function(app, assembly) dxfService.ExportAssembly(app, assembly, dxfOptions, progress, AddressOf IsCancellationRequested))
+                    Function(app, assembly) dxfService.ExportFiles(app, assembly.Path, dxfOptions, expectedTargetFiles, progress, AddressOf IsCancellationRequested))
             End Function)
 
         If Not dxfExported Then
@@ -2604,7 +2620,7 @@ Public Class SET_MainForm
                     asmFilePath,
                     GetApplicationOptions(),
                     False,
-                    Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions, progress, AddressOf IsCancellationRequested))
+                    Function(app, assembly) draftService.GenerateForFiles(app, assembly.Path, draftOptions, expectedTargetFiles, progress, AddressOf IsCancellationRequested))
             End Function)
 
         If Not dftGenerated Then
@@ -2627,6 +2643,74 @@ Public Class SET_MainForm
         End If
 
         Return True
+    End Function
+
+    Private Function CleanFolder_Execute(asmFilePath As String) As Boolean
+        Dim projectRoot = Path.GetDirectoryName(asmFilePath)
+        Dim usedFiles As List(Of String) = Nothing
+        Dim protectedFiles As HashSet(Of String) = Nothing
+        Dim candidateFiles As List(Of String) = Nothing
+        Dim orphanFiles As List(Of String) = Nothing
+
+        If String.IsNullOrWhiteSpace(projectRoot) OrElse Not Directory.Exists(projectRoot) Then
+            MessageBox.Show(Me, "Cartella progetto non trovata.", "Clean Folder", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        Dim analysisCompleted = ExecuteWithProgress(
+            "Clean Folder - Analisi",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly)
+                        usedFiles = GetUsedAssemblyDocumentFiles(assembly)
+                        protectedFiles = CollectProtectedDependencyFiles(app, assembly, usedFiles, progress)
+
+                        If protectedFiles Is Nothing Then
+                            Return False
+                        End If
+
+                        candidateFiles = GetProjectDesignFiles(projectRoot)
+                        orphanFiles = candidateFiles.
+                            Except(usedFiles, StringComparer.OrdinalIgnoreCase).
+                            Except(protectedFiles, StringComparer.OrdinalIgnoreCase).
+                            ToList()
+
+                        Return True
+                    End Function)
+            End Function)
+
+        If Not analysisCompleted Then
+            Return False
+        End If
+
+        Dim summary = BuildCleanFolderSummary(projectRoot, usedFiles, protectedFiles, candidateFiles, orphanFiles)
+
+        If orphanFiles.Count = 0 Then
+            MessageBox.Show(Me,
+                            summary & Environment.NewLine & Environment.NewLine & "Nessun file da spostare.",
+                            "Clean Folder",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information)
+            Return True
+        End If
+
+        If MessageBox.Show(Me,
+                           summary & Environment.NewLine & Environment.NewLine & "Spostare i file elencati in Recycle_bin?",
+                           "Conferma Clean Folder",
+                           MessageBoxButtons.YesNo,
+                           MessageBoxIcon.Question,
+                           MessageBoxDefaultButton.Button2) <> DialogResult.Yes Then
+            Return False
+        End If
+
+        Return ExecuteWithProgress(
+            "Clean Folder - Spostamento",
+            Function(progress)
+                Return MoveFilesToRecycleBin(projectRoot, orphanFiles, progress, AddressOf IsCancellationRequested)
+            End Function)
     End Function
 
     Private Sub btnCodificaProgetto_Click(sender As Object, e As EventArgs) Handles btnCodificaProgetto.Click
@@ -2917,6 +3001,394 @@ Public Class SET_MainForm
 
         Directory.Move(folderPath, archivedFolderPath)
     End Sub
+
+    Private Function GetUsedAssemblyDocumentFiles(assembly As SolidEdgeAssembly.AssemblyDocument) As List(Of String)
+        Dim walker As New OccurrenceWalker()
+        Dim usedFiles As New List(Of String)
+        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        AddDesignFilePath(usedFiles, uniqueFiles, assembly.FullName)
+
+        walker.Walk(
+            assembly.Occurrences,
+            True,
+            Function(item)
+                AddDesignFilePath(usedFiles, uniqueFiles, item.OccurrenceFileName)
+                Return True
+            End Function)
+
+        Return usedFiles
+    End Function
+
+    Private Sub AddDesignFilePath(targetList As List(Of String),
+                                  uniqueFiles As HashSet(Of String),
+                                  filePath As String)
+        If String.IsNullOrWhiteSpace(filePath) Then
+            Return
+        End If
+
+        Dim extension = Path.GetExtension(filePath).ToLowerInvariant()
+
+        If extension <> ".asm" AndAlso extension <> ".par" AndAlso extension <> ".psm" Then
+            Return
+        End If
+
+        Dim fullPath = Path.GetFullPath(filePath)
+
+        If uniqueFiles.Add(fullPath) Then
+            targetList.Add(fullPath)
+        End If
+    End Sub
+
+    Private Function CollectProtectedDependencyFiles(seApplication As SolidEdgeFramework.Application,
+                                                     rootAssembly As SolidEdgeAssembly.AssemblyDocument,
+                                                     usedFiles As IEnumerable(Of String),
+                                                     progress As Action(Of Integer, Integer, String)) As HashSet(Of String)
+        Dim protectedFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Dim resolvedUsedFiles = usedFiles.ToList()
+        Dim seDocuments As SolidEdgeFramework.Documents = Nothing
+        Dim processed As Integer = 0
+
+        Try
+            seDocuments = seApplication.Documents
+
+            For Each usedFile In resolvedUsedFiles
+                If IsCancellationRequested() Then
+                    Return Nothing
+                End If
+
+                processed += 1
+                progress(processed, resolvedUsedFiles.Count, usedFile)
+
+                Dim openedDocument As Object = Nothing
+                Dim documentToInspect As Object = Nothing
+
+                Try
+                    If String.Equals(Path.GetFullPath(usedFile), Path.GetFullPath(rootAssembly.FullName), StringComparison.OrdinalIgnoreCase) Then
+                        documentToInspect = rootAssembly
+                    Else
+                        openedDocument = seDocuments.Open(usedFile)
+                        documentToInspect = openedDocument
+                    End If
+
+                    AddProtectedFileReferences(documentToInspect, usedFile, protectedFiles)
+                Catch ex As Exception
+                    Throw New InvalidOperationException(String.Format("Impossibile analizzare le dipendenze del file '{0}'.", usedFile), ex)
+                Finally
+                    If openedDocument IsNot Nothing Then
+                        Try
+                            CallByName(openedDocument, "Close", CallType.Method)
+                        Catch
+                        End Try
+
+                        ReleaseCOMReference(openedDocument)
+                    End If
+                End Try
+            Next
+        Finally
+            ReleaseCOMReference(seDocuments)
+        End Try
+
+        Return protectedFiles
+    End Function
+
+    Private Sub AddProtectedFileReferences(documentToInspect As Object,
+                                           documentPath As String,
+                                           protectedFiles As HashSet(Of String))
+
+        AddReferencedFilesFromCollection(TryGetComValue(documentToInspect, "InterpartLinks"),
+                                         documentPath,
+                                         protectedFiles,
+                                         "FileName",
+                                         "DocumentName",
+                                         "SourceDocumentName",
+                                         "SourceFileName")
+
+        AddReferencedFilesFromCollection(TryGetComValue(documentToInspect, "DividedParts"),
+                                         documentPath,
+                                         protectedFiles,
+                                         "DocumentName",
+                                         "FileName")
+
+        AddReferencedFilesFromCollection(TryGetComValue(documentToInspect, "CopiedParts"),
+                                         documentPath,
+                                         protectedFiles,
+                                         "FileName",
+                                         "DocumentName")
+
+        AddReferencedFilesFromModels(documentToInspect, documentPath, protectedFiles)
+        AddReferencedFilesFromConstructions(documentToInspect, documentPath, protectedFiles)
+    End Sub
+
+    Private Sub AddReferencedFilesFromModels(documentToInspect As Object,
+                                             documentPath As String,
+                                             protectedFiles As HashSet(Of String))
+        Dim models = TryGetComValue(documentToInspect, "Models")
+
+        If models Is Nothing Then
+            Return
+        End If
+
+        For Each model In EnumerateComCollection(models)
+            AddResolvedDesignPath(TryGetStringComValue(model, "FileName", "DocumentName"), documentPath, protectedFiles)
+            AddReferencedFilesFromCollection(TryGetComValue(model, "CopiedParts"),
+                                             documentPath,
+                                             protectedFiles,
+                                             "FileName",
+                                             "DocumentName")
+        Next
+    End Sub
+
+    Private Sub AddReferencedFilesFromConstructions(documentToInspect As Object,
+                                                    documentPath As String,
+                                                    protectedFiles As HashSet(Of String))
+        Dim constructions = TryGetComValue(documentToInspect, "Constructions")
+
+        If constructions Is Nothing Then
+            Return
+        End If
+
+        AddReferencedFilesFromCollection(TryGetComValue(constructions, "CopyConstructions"),
+                                         documentPath,
+                                         protectedFiles,
+                                         "FileName",
+                                         "DocumentName")
+
+        AddReferencedFilesFromCollection(TryGetComValue(constructions, "CopySurfaces"),
+                                         documentPath,
+                                         protectedFiles,
+                                         "FileName",
+                                         "DocumentName")
+    End Sub
+
+    Private Sub AddReferencedFilesFromCollection(collection As Object,
+                                                 documentPath As String,
+                                                 protectedFiles As HashSet(Of String),
+                                                 ParamArray propertyNames() As String)
+        If collection Is Nothing Then
+            Return
+        End If
+
+        For Each item In EnumerateComCollection(collection)
+            AddResolvedDesignPath(TryGetStringComValue(item, propertyNames), documentPath, protectedFiles)
+        Next
+    End Sub
+
+    Private Function EnumerateComCollection(collection As Object) As List(Of Object)
+        Dim items As New List(Of Object)
+
+        If collection Is Nothing Then
+            Return items
+        End If
+
+        Dim countObject = TryGetComValue(collection, "Count")
+
+        If countObject Is Nothing Then
+            Return items
+        End If
+
+        Dim count As Integer
+
+        If Not Integer.TryParse(Convert.ToString(countObject), count) Then
+            Return items
+        End If
+
+        For index As Integer = 1 To count
+            Try
+                Dim item = CallByName(collection, "Item", CallType.Method, index)
+
+                If item IsNot Nothing Then
+                    items.Add(item)
+                End If
+            Catch
+            End Try
+        Next
+
+        Return items
+    End Function
+
+    Private Function TryGetComValue(target As Object, propertyName As String) As Object
+        If target Is Nothing Then
+            Return Nothing
+        End If
+
+        Try
+            Return CallByName(target, propertyName, CallType.Get)
+        Catch
+            Return Nothing
+        End Try
+    End Function
+
+    Private Function TryGetStringComValue(target As Object, ParamArray propertyNames() As String) As String
+        For Each propertyName In propertyNames
+            Dim value = TryGetComValue(target, propertyName)
+
+            If value IsNot Nothing Then
+                Dim stringValue = Convert.ToString(value)
+
+                If Not String.IsNullOrWhiteSpace(stringValue) Then
+                    Return stringValue
+                End If
+            End If
+        Next
+
+        Return ""
+    End Function
+
+    Private Sub AddResolvedDesignPath(rawPath As String,
+                                      sourceDocumentPath As String,
+                                      protectedFiles As HashSet(Of String))
+        If String.IsNullOrWhiteSpace(rawPath) Then
+            Return
+        End If
+
+        Dim resolvedPath = rawPath
+
+        If Not Path.IsPathRooted(resolvedPath) Then
+            resolvedPath = Path.Combine(Path.GetDirectoryName(sourceDocumentPath), resolvedPath)
+        End If
+
+        Try
+            resolvedPath = Path.GetFullPath(resolvedPath)
+        Catch
+            Return
+        End Try
+
+        Dim extension = Path.GetExtension(resolvedPath).ToLowerInvariant()
+
+        If extension <> ".asm" AndAlso extension <> ".par" AndAlso extension <> ".psm" Then
+            Return
+        End If
+
+        If File.Exists(resolvedPath) Then
+            protectedFiles.Add(resolvedPath)
+        End If
+    End Sub
+
+    Private Function GetProjectDesignFiles(projectRoot As String) As List(Of String)
+        Return Directory.
+            EnumerateFiles(projectRoot, "*.*", SearchOption.AllDirectories).
+            Where(Function(filePath)
+                      If IsFileInsideRecycleBin(projectRoot, filePath) Then
+                          Return False
+                      End If
+
+                      Dim extension = Path.GetExtension(filePath).ToLowerInvariant()
+                      Return extension = ".asm" OrElse extension = ".par" OrElse extension = ".psm"
+                  End Function).
+            Select(Function(filePath) Path.GetFullPath(filePath)).
+            ToList()
+    End Function
+
+    Private Function IsFileInsideRecycleBin(projectRoot As String, filePath As String) As Boolean
+        Dim recycleRoot = Path.Combine(projectRoot, "Recycle_bin")
+        Dim normalizedRecycleRoot = Path.GetFullPath(recycleRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) & Path.DirectorySeparatorChar
+        Dim normalizedPath = Path.GetFullPath(filePath)
+
+        Return normalizedPath.StartsWith(normalizedRecycleRoot, StringComparison.OrdinalIgnoreCase)
+    End Function
+
+    Private Function BuildCleanFolderSummary(projectRoot As String,
+                                             usedFiles As List(Of String),
+                                             protectedFiles As HashSet(Of String),
+                                             candidateFiles As List(Of String),
+                                             orphanFiles As List(Of String)) As String
+        Dim preview = orphanFiles.
+            OrderBy(Function(path) path, StringComparer.OrdinalIgnoreCase).
+            Take(20).
+            Select(Function(path) " - " & GetRelativeProjectPath(projectRoot, path)).
+            ToList()
+
+        Dim messageLines As New List(Of String) From {
+            String.Format("Cartella progetto: {0}", projectRoot),
+            String.Format("File usati dall'assieme: {0}", usedFiles.Count),
+            String.Format("File protetti da dipendenze esterne: {0}", protectedFiles.Count),
+            String.Format("File progetto analizzati: {0}", candidateFiles.Count),
+            String.Format("File da spostare in Recycle_bin: {0}", orphanFiles.Count)
+        }
+
+        If preview.Count > 0 Then
+            messageLines.Add("")
+            messageLines.Add("Anteprima primi file:")
+            messageLines.AddRange(preview)
+
+            If orphanFiles.Count > preview.Count Then
+                messageLines.Add(String.Format(" ... altri {0} file", orphanFiles.Count - preview.Count))
+            End If
+        End If
+
+        Return String.Join(Environment.NewLine, messageLines)
+    End Function
+
+    Private Function GetRelativeProjectPath(projectRoot As String, fullPath As String) As String
+        Dim rootPath = Path.GetFullPath(projectRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        Dim normalizedPath = Path.GetFullPath(fullPath)
+
+        If normalizedPath.StartsWith(rootPath & Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) Then
+            Return normalizedPath.Substring(rootPath.Length + 1)
+        End If
+
+        Return normalizedPath
+    End Function
+
+    Private Function MoveFilesToRecycleBin(projectRoot As String,
+                                           filesToMove As IEnumerable(Of String),
+                                           progress As Action(Of Integer, Integer, String),
+                                           shouldCancel As Func(Of Boolean)) As Boolean
+        Dim resolvedFiles = filesToMove.OrderBy(Function(path) path, StringComparer.OrdinalIgnoreCase).ToList()
+        Dim processed As Integer = 0
+        Dim recycleRoot = Path.Combine(projectRoot, "Recycle_bin")
+
+        If progress IsNot Nothing Then
+            progress(0, resolvedFiles.Count, "")
+        End If
+
+        For Each sourceFile In resolvedFiles
+            If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
+                Return False
+            End If
+
+            Dim relativePath = GetRelativeProjectPath(projectRoot, sourceFile)
+            Dim targetFile = Path.Combine(recycleRoot, relativePath)
+
+            targetFile = EnsureUniqueRecycleBinPath(targetFile)
+
+            Dim targetDirectory = Path.GetDirectoryName(targetFile)
+
+            If Not Directory.Exists(targetDirectory) Then
+                Directory.CreateDirectory(targetDirectory)
+            End If
+
+            File.Move(sourceFile, targetFile)
+
+            processed += 1
+
+            If progress IsNot Nothing Then
+                progress(processed, resolvedFiles.Count, sourceFile)
+            End If
+        Next
+
+        Return True
+    End Function
+
+    Private Function EnsureUniqueRecycleBinPath(targetFilePath As String) As String
+        If Not File.Exists(targetFilePath) Then
+            Return targetFilePath
+        End If
+
+        Dim directoryPath = Path.GetDirectoryName(targetFilePath)
+        Dim fileName = Path.GetFileNameWithoutExtension(targetFilePath)
+        Dim extension = Path.GetExtension(targetFilePath)
+        Dim suffixIndex As Integer = 1
+        Dim candidatePath = targetFilePath
+
+        Do
+            candidatePath = Path.Combine(directoryPath, String.Format("{0}_{1:00}{2}", fileName, suffixIndex, extension))
+            suffixIndex += 1
+        Loop While File.Exists(candidatePath)
+
+        Return candidatePath
+    End Function
 
     Private Function GetProductConfiguration() As ProductConfiguration
         Dim input As New ConfigurationInputModel() With {

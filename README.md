@@ -1,6 +1,6 @@
 # SolidEdgeTools
 
-[![Version](https://img.shields.io/badge/version-1.2.1.0-blue)](./SolidEdgeTools/My%20Project/AssemblyInfo.vb)
+[![Version](https://img.shields.io/badge/version-1.3.0.0-blue)](./SolidEdgeTools/My%20Project/AssemblyInfo.vb)
 [![VB.NET](https://img.shields.io/badge/language-VB.NET-5C2D91)](./SolidEdgeTools)
 [![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.6-512BD4)](./SolidEdgeTools/SolidEdgeTools.vbproj)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x86-0078D6)](./SolidEdgeTools/SolidEdgeTools.vbproj)

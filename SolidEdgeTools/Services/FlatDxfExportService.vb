@@ -21,25 +21,36 @@ Public Class FlatDxfExportService
                                    Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
 
         Dim targetFiles = GetTargetFiles(assembly, options)
+        Return ExportFiles(seApplication, assembly.Path, options, targetFiles, progress, shouldCancel)
+    End Function
+
+    Public Function ExportFiles(seApplication As SolidEdgeFramework.Application,
+                                rootAssemblyPath As String,
+                                options As FlatDxfExportOptions,
+                                targetFiles As IEnumerable(Of String),
+                                Optional progress As Action(Of Integer, Integer, String) = Nothing,
+                                Optional shouldCancel As Func(Of Boolean) = Nothing) As Boolean
+
+        Dim resolvedTargets = New List(Of String)(targetFiles)
         Dim processed As Integer = 0
 
         If progress IsNot Nothing Then
-            progress(0, targetFiles.Count, "")
+            progress(0, resolvedTargets.Count, "")
         End If
 
-        For Each occurrenceFileName In targetFiles
+        For Each occurrenceFileName In resolvedTargets
             If shouldCancel IsNot Nothing AndAlso shouldCancel() Then
                 Return False
             End If
 
-            If Not ExportFile(seApplication, assembly.Path, options, occurrenceFileName) Then
+            If Not ExportFile(seApplication, rootAssemblyPath, options, occurrenceFileName) Then
                 Return False
             End If
 
             processed += 1
 
             If progress IsNot Nothing Then
-                progress(processed, targetFiles.Count, occurrenceFileName)
+                progress(processed, resolvedTargets.Count, occurrenceFileName)
             End If
         Next
 

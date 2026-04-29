@@ -59,6 +59,7 @@ Partial Class SET_MainForm
         Me.progressOperations = New System.Windows.Forms.ProgressBar()
         Me.btnCancelOperation = New System.Windows.Forms.Button()
         Me.btnProduzioneLamiera = New System.Windows.Forms.Button()
+        Me.btnCleanFolder = New System.Windows.Forms.Button()
         Me.chkAutoLayoutDft = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
         '
@@ -381,12 +382,22 @@ Partial Class SET_MainForm
         Me.btnProduzioneLamiera.Text = "Produzione Lamiera"
         Me.btnProduzioneLamiera.UseVisualStyleBackColor = True
         '
+        'btnCleanFolder
+        '
+        Me.btnCleanFolder.Location = New System.Drawing.Point(139, 105)
+        Me.btnCleanFolder.Name = "btnCleanFolder"
+        Me.btnCleanFolder.Size = New System.Drawing.Size(95, 25)
+        Me.btnCleanFolder.TabIndex = 21
+        Me.btnCleanFolder.Text = "Clean Folder"
+        Me.btnCleanFolder.UseVisualStyleBackColor = True
+        '
         'SET_MainForm
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.SystemColors.Control
         Me.ClientSize = New System.Drawing.Size(684, 289)
+        Me.Controls.Add(Me.btnCleanFolder)
         Me.Controls.Add(Me.btnProduzioneLamiera)
         Me.Controls.Add(Me.btnCancelOperation)
         Me.Controls.Add(Me.progressOperations)
@@ -465,5 +476,6 @@ Partial Class SET_MainForm
     Friend WithEvents progressOperations As ProgressBar
     Friend WithEvents btnCancelOperation As Button
     Friend WithEvents btnProduzioneLamiera As Button
+    Friend WithEvents btnCleanFolder As Button
     Friend WithEvents chkAutoLayoutDft As CheckBox
 End Class

@@ -507,6 +507,30 @@ Additional workflow candidate:
   - material target limited to `FabLab`
   - supplier BOM export saved with `Plastiche_` prefix
   - STL export chain for the filtered components
+
+## 19. Current `Clean Folder` Notes
+
+Current intent:
+
+- analyze the root folder of a selected assembly and all subfolders
+- identify `.asm`, `.par`, `.psm` files not actually used by the assembly
+- preserve files that are not mounted in the assembly but are still required by interpart or copied-part style dependencies
+- move only validated unused files into a top-level `Recycle_bin` folder
+
+Current implementation state:
+
+- first conservative implementation exists in the UI as `Clean Folder`
+- it builds the true assembly usage set from recursive occurrences
+- it builds a protected dependency set from interpart and copied/derived references where they are exposed by the API
+- it excludes files already under `Recycle_bin`
+- it preserves relative folder structure when moving files
+- it shows an analysis summary before any move operation
+- it uses move-only behavior, not deletion
+
+Important limitation:
+
+- dependency protection is intentionally conservative but still depends on what the installed V20 API exposes per document type and feature type
+- this workflow should be validated on real projects containing part copy / interpart-linked documents before being treated as fully mature
 3. Refactor architecture
 4. Implement Geometry Engine
 5. Integrate existing export logic
