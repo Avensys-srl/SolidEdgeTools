@@ -2500,6 +2500,22 @@ Public Class SET_MainForm
         End Try
     End Sub
 
+    Private Sub btnProduzionePla_Click(sender As Object, e As EventArgs) Handles btnProduzionePla.Click
+        Try
+            If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
+                RememberAssemblyPath(ofdSelectASMFile.FileName)
+
+                If ProduzionePla_Execute(ofdSelectASMFile.FileName) Then
+                    MessageBox.Show(Me, "Produzione PLA completata.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ElseIf _cancelRequested Then
+                    MessageBox.Show(Me, "Produzione PLA interrotta.", "Informazione", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                End If
+            End If
+        Catch exception As Exception
+            DisplayException(exception)
+        End Try
+    End Sub
+
     Private Sub btnCleanFolder_Click(sender As Object, e As EventArgs) Handles btnCleanFolder.Click
         Try
             If ofdSelectASMFile.ShowDialog() = Windows.Forms.DialogResult.OK Then
@@ -2537,7 +2553,6 @@ Public Class SET_MainForm
         Dim bomOptions = BuildSheetMetalProductionBomOptions(sheetMetalMaterials)
         Dim dxfOptions = BuildSheetMetalProductionDxfOptions(sheetMetalMaterials)
         Dim draftOptions = BuildSheetMetalProductionDraftOptions(sheetMetalMaterials)
-        Dim bomService As New BomService(AddressOf PsmGetProperty)
         Dim dxfService As New FlatDxfExportService(AddressOf ExportSheetMetalDocumentToDxf,
                                                    AddressOf DisplayException)
         Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale, draftOptions.AutoLayoutSheetMetalViews),
@@ -2545,40 +2560,54 @@ Public Class SET_MainForm
         Dim assemblyDirectory = Path.GetDirectoryName(asmFilePath)
         Dim supplierBomPath = Path.Combine(assemblyDirectory, "Lista_" & Path.GetFileNameWithoutExtension(asmFilePath) & ".xlsx")
         Dim expectedTargetFiles As List(Of String) = Nothing
-        Dim expectedLabels As HashSet(Of String) = Nothing
+        Dim expectedTargetCounts As Dictionary(Of String, Integer) = Nothing
         Dim expectedCount As Integer = 0
 
-        BeginProgress("Produzione Lamiera - BOM")
+        Dim bomBuilt = ExecuteWithProgress(
+            "Produzione Lamiera - BOM",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly)
+                        expectedTargetCounts = GetSheetMetalProductionTargetCounts(assembly, dxfOptions)
+                        expectedTargetFiles = expectedTargetCounts.Keys.ToList()
 
-        Try
-            Dim bomBuilt = _workflowService.ExecuteWithAssembly(
-                asmFilePath,
-                GetApplicationOptions(),
-                False,
-                Function(app, assembly)
-                    expectedTargetFiles = GetSheetMetalProductionTargets(assembly, dxfOptions)
-                    expectedLabels = New HashSet(Of String)(
-                        expectedTargetFiles.Select(Function(targetPath) bomOptions.Prefix & System.IO.Path.GetFileNameWithoutExtension(targetPath)),
-                        StringComparer.OrdinalIgnoreCase)
+                        Dim duplicateOutputNames = GetConflictingOutputNames(expectedTargetFiles, bomOptions.Prefix)
 
-                    Dim bomAssembly = bomService.Build(assembly.FullName, assembly.Occurrences)
-                    Dim supplierArray = bomService.ToSupplierArray(bomAssembly, bomOptions)
-                    Dim filteredArray = FilterSpreadsheetArrayByFirstColumn(supplierArray, expectedLabels)
+                        If duplicateOutputNames.Count > 0 Then
+                            Throw New InvalidOperationException("Conflitto nomi output rilevato per Produzione Lamiera:" &
+                                                                Environment.NewLine &
+                                                                String.Join(Environment.NewLine, duplicateOutputNames.Select(Function(name) " - " & name)))
+                        End If
 
-                    expectedCount = CountSpreadsheetDataRows(filteredArray)
-                    WriteSpreadsheetFromArray(filteredArray, supplierBomPath, False)
-                    Return True
-                End Function)
+                        Dim supplierArray = BuildProductionSupplierArray(expectedTargetFiles,
+                                                                         expectedTargetCounts,
+                                                                         bomOptions,
+                                                                         progress)
 
-            If Not bomBuilt Then
-                Return False
-            End If
-        Finally
-            EndProgress()
-        End Try
+                        expectedCount = CountSpreadsheetDataRows(supplierArray)
+                        WriteSpreadsheetFromArray(supplierArray, supplierBomPath, False)
+                        Return True
+                    End Function)
+            End Function)
+
+        If Not bomBuilt Then
+            Return False
+        End If
 
         If expectedCount = 0 Then
             MessageBox.Show(Me, "Nessun particolare in lamiera trovato nell'assieme selezionato.", "Validazione Produzione Lamiera", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        If expectedTargetFiles Is Nothing OrElse expectedCount <> expectedTargetFiles.Count Then
+            MessageBox.Show(Me,
+                            String.Format("BOM non allineata al set target. Righe BOM: {0}, target attesi: {1}.", expectedCount, If(expectedTargetFiles Is Nothing, 0, expectedTargetFiles.Count)),
+                            "Validazione Produzione Lamiera",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning)
             Return False
         End If
 
@@ -2637,6 +2666,100 @@ Public Class SET_MainForm
             MessageBox.Show(Me,
                             "Verifica DFT non soddisfatta:" & Environment.NewLine & String.Join(Environment.NewLine, dftIssues),
                             "Validazione Produzione Lamiera",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        Return True
+    End Function
+
+    Private Function ProduzionePla_Execute(asmFilePath As String) As Boolean
+        Dim plaMaterials = GetPlaProductionMaterialSelection()
+        Dim bomOptions = BuildPlaProductionBomOptions(plaMaterials)
+        Dim exportOptions = BuildPlaProductionStlOptions(plaMaterials)
+        Dim exportService As New NeutralExportService(AddressOf ExportPartDocument,
+                                                      AddressOf ExportSheetMetalDocumentDocument,
+                                                      AddressOf DisplayException)
+        Dim assemblyDirectory = Path.GetDirectoryName(asmFilePath)
+        Dim stlDirectory = Path.Combine(assemblyDirectory, "stl")
+        Dim supplierBomPath = Path.Combine(stlDirectory, "Lista_PLA_" & Path.GetFileNameWithoutExtension(asmFilePath) & ".xlsx")
+        Dim expectedTargetFiles As List(Of String) = Nothing
+        Dim expectedTargetCounts As Dictionary(Of String, Integer) = Nothing
+        Dim expectedCount As Integer = 0
+
+        Dim bomBuilt = ExecuteWithProgress(
+            "Produzione PLA - BOM",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly)
+                        expectedTargetCounts = GetPlaProductionTargetCounts(assembly, exportOptions)
+                        expectedTargetFiles = expectedTargetCounts.Keys.ToList()
+
+                        Dim duplicateOutputNames = GetConflictingOutputNames(expectedTargetFiles, bomOptions.Prefix)
+
+                        If duplicateOutputNames.Count > 0 Then
+                            Throw New InvalidOperationException("Conflitto nomi output rilevato per Produzione PLA:" &
+                                                                Environment.NewLine &
+                                                                String.Join(Environment.NewLine, duplicateOutputNames.Select(Function(name) " - " & name)))
+                        End If
+
+                        Dim supplierArray = BuildProductionSupplierArray(expectedTargetFiles,
+                                                                         expectedTargetCounts,
+                                                                         bomOptions,
+                                                                         progress)
+
+                        expectedCount = CountSpreadsheetDataRows(supplierArray)
+                        WriteSpreadsheetFromArray(supplierArray, supplierBomPath, False)
+                        Return True
+                    End Function)
+            End Function)
+
+        If Not bomBuilt Then
+            Return False
+        End If
+
+        If expectedCount = 0 Then
+            MessageBox.Show(Me, "Nessun particolare PLA/FabLab trovato nell'assieme selezionato.", "Validazione Produzione PLA", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        If expectedTargetFiles Is Nothing OrElse expectedCount <> expectedTargetFiles.Count Then
+            MessageBox.Show(Me,
+                            String.Format("BOM non allineata al set target. Righe BOM: {0}, target attesi: {1}.", expectedCount, If(expectedTargetFiles Is Nothing, 0, expectedTargetFiles.Count)),
+                            "Validazione Produzione PLA",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning)
+            Return False
+        End If
+
+        Dim stlExported = ExecuteWithProgress(
+            "Produzione PLA - STL",
+            Function(progress)
+                Return _workflowService.ExecuteWithAssembly(
+                    asmFilePath,
+                    GetApplicationOptions(),
+                    False,
+                    Function(app, assembly) exportService.ExportFiles(app, assembly.Path, exportOptions, expectedTargetFiles, progress, AddressOf IsCancellationRequested))
+            End Function)
+
+        If Not stlExported Then
+            Return False
+        End If
+
+        Dim stlIssues = ValidateExportedFiles(stlDirectory,
+                                              expectedTargetFiles,
+                                              bomOptions.Prefix,
+                                              ".stl",
+                                              0)
+
+        If stlIssues.Count > 0 Then
+            MessageBox.Show(Me,
+                            "Verifica STL non soddisfatta:" & Environment.NewLine & String.Join(Environment.NewLine, stlIssues),
+                            "Validazione Produzione PLA",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning)
             Return False
@@ -2845,6 +2968,12 @@ Public Class SET_MainForm
         Return options
     End Function
 
+    Private Function GetPlaProductionMaterialSelection() As MaterialSelectionOptions
+        Dim options As New MaterialSelectionOptions()
+        options.SelectedMaterials.Add("FabLab")
+        Return options
+    End Function
+
     Private Function BuildSheetMetalProductionBomOptions(materialSelection As MaterialSelectionOptions) As BomExportOptions
         Return New BomExportOptions() With {
             .Prefix = Prefisso.Text,
@@ -2869,12 +2998,32 @@ Public Class SET_MainForm
         }
     End Function
 
+    Private Function BuildPlaProductionBomOptions(materialSelection As MaterialSelectionOptions) As BomExportOptions
+        Return New BomExportOptions() With {
+            .Prefix = Prefisso.Text,
+            .MaterialSelection = materialSelection
+        }
+    End Function
+
+    Private Function BuildPlaProductionStlOptions(materialSelection As MaterialSelectionOptions) As NeutralExportOptions
+        Return New NeutralExportOptions() With {
+            .ExportType = "stl",
+            .Prefix = Prefisso.Text,
+            .MaterialSelection = materialSelection
+        }
+    End Function
+
     Private Function GetSheetMetalProductionTargets(assembly As SolidEdgeAssembly.AssemblyDocument,
                                                     options As FlatDxfExportOptions) As List(Of String)
 
+        Return GetSheetMetalProductionTargetCounts(assembly, options).Keys.ToList()
+    End Function
+
+    Private Function GetSheetMetalProductionTargetCounts(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                                         options As FlatDxfExportOptions) As Dictionary(Of String, Integer)
+
         Dim walker As New OccurrenceWalker()
-        Dim targets As New List(Of String)
-        Dim uniqueFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Dim targetCounts As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
 
         walker.Walk(
             assembly.Occurrences,
@@ -2892,14 +3041,100 @@ Public Class SET_MainForm
                     Return True
                 End If
 
-                If uniqueFiles.Add(item.OccurrenceFileName) Then
-                    targets.Add(item.OccurrenceFileName)
+                If targetCounts.ContainsKey(item.OccurrenceFileName) Then
+                    targetCounts(item.OccurrenceFileName) += 1
+                Else
+                    targetCounts.Add(item.OccurrenceFileName, 1)
                 End If
 
                 Return True
             End Function)
 
-        Return targets
+        Return targetCounts
+    End Function
+
+    Private Function GetPlaProductionTargetCounts(assembly As SolidEdgeAssembly.AssemblyDocument,
+                                                  options As NeutralExportOptions) As Dictionary(Of String, Integer)
+
+        Dim walker As New OccurrenceWalker()
+        Dim targetCounts As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
+
+        walker.Walk(
+            assembly.Occurrences,
+            True,
+            Function(item)
+                If item.Type <> SolidEdgeFramework.ObjectType.igPart Then
+                    Return True
+                End If
+
+                Dim extension = Path.GetExtension(item.OccurrenceFileName).ToLowerInvariant()
+
+                If extension <> ".par" AndAlso extension <> ".psm" Then
+                    Return True
+                End If
+
+                If Not MaterialFilter.MatchesSelectedMaterial(FilePropertyService.GetPropertyValue(item.OccurrenceFileName, "MechanicalModeling", "Material"), options.MaterialSelection.SelectedMaterials) Then
+                    Return True
+                End If
+
+                If targetCounts.ContainsKey(item.OccurrenceFileName) Then
+                    targetCounts(item.OccurrenceFileName) += 1
+                Else
+                    targetCounts.Add(item.OccurrenceFileName, 1)
+                End If
+
+                Return True
+            End Function)
+
+        Return targetCounts
+    End Function
+
+    Private Function BuildProductionSupplierArray(targetFiles As IEnumerable(Of String),
+                                                  targetCounts As Dictionary(Of String, Integer),
+                                                  options As BomExportOptions,
+                                                  progress As Action(Of Integer, Integer, String)) As Array
+        Dim resolvedTargets = targetFiles.ToList()
+        Dim values(resolvedTargets.Count, 4) As String
+        Dim rowIndex As Integer = 0
+        Dim processed As Integer = 0
+
+        values.SetValue("Nome File", rowIndex, 0)
+        values.SetValue("Spessore", rowIndex, 1)
+        values.SetValue("Materiale", rowIndex, 2)
+        values.SetValue("Quantità", rowIndex, 3)
+        rowIndex += 1
+
+        If progress IsNot Nothing Then
+            progress(0, resolvedTargets.Count, "")
+        End If
+
+        For Each targetFile In resolvedTargets
+            processed += 1
+
+            values.SetValue(options.Prefix & Path.GetFileNameWithoutExtension(targetFile), rowIndex, 0)
+            values.SetValue(PsmGetProperty(targetFile, "Custom", "Material Thickness"), rowIndex, 1)
+            values.SetValue(PsmGetProperty(targetFile, "MechanicalModeling", "Material"), rowIndex, 2)
+            values.SetValue(targetCounts(targetFile).ToString(), rowIndex, 3)
+
+            If progress IsNot Nothing Then
+                progress(processed, resolvedTargets.Count, targetFile)
+            End If
+
+            rowIndex += 1
+        Next
+
+        Return values
+    End Function
+
+    Private Function GetConflictingOutputNames(targetFiles As IEnumerable(Of String),
+                                               prefix As String) As List(Of String)
+        Return targetFiles.
+            GroupBy(Function(targetFile) prefix & Path.GetFileNameWithoutExtension(targetFile),
+                    StringComparer.OrdinalIgnoreCase).
+            Where(Function(group) group.Count() > 1).
+            Select(Function(group) group.Key).
+            OrderBy(Function(name) name, StringComparer.OrdinalIgnoreCase).
+            ToList()
     End Function
 
     Private Function FilterSpreadsheetArrayByFirstColumn(sourceArray As Array,

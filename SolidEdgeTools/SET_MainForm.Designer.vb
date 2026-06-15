@@ -59,6 +59,7 @@ Partial Class SET_MainForm
         Me.progressOperations = New System.Windows.Forms.ProgressBar()
         Me.btnCancelOperation = New System.Windows.Forms.Button()
         Me.btnProduzioneLamiera = New System.Windows.Forms.Button()
+        Me.btnProduzionePla = New System.Windows.Forms.Button()
         Me.btnCleanFolder = New System.Windows.Forms.Button()
         Me.chkAutoLayoutDft = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
@@ -382,12 +383,21 @@ Partial Class SET_MainForm
         Me.btnProduzioneLamiera.Text = "Produzione Lamiera"
         Me.btnProduzioneLamiera.UseVisualStyleBackColor = True
         '
+        'btnProduzionePla
+        '
+        Me.btnProduzionePla.Location = New System.Drawing.Point(139, 105)
+        Me.btnProduzionePla.Name = "btnProduzionePla"
+        Me.btnProduzionePla.Size = New System.Drawing.Size(121, 25)
+        Me.btnProduzionePla.TabIndex = 21
+        Me.btnProduzionePla.Text = "Produzione PLA"
+        Me.btnProduzionePla.UseVisualStyleBackColor = True
+        '
         'btnCleanFolder
         '
-        Me.btnCleanFolder.Location = New System.Drawing.Point(139, 105)
+        Me.btnCleanFolder.Location = New System.Drawing.Point(266, 105)
         Me.btnCleanFolder.Name = "btnCleanFolder"
         Me.btnCleanFolder.Size = New System.Drawing.Size(95, 25)
-        Me.btnCleanFolder.TabIndex = 21
+        Me.btnCleanFolder.TabIndex = 22
         Me.btnCleanFolder.Text = "Clean Folder"
         Me.btnCleanFolder.UseVisualStyleBackColor = True
         '
@@ -398,6 +408,7 @@ Partial Class SET_MainForm
         Me.BackColor = System.Drawing.SystemColors.Control
         Me.ClientSize = New System.Drawing.Size(684, 289)
         Me.Controls.Add(Me.btnCleanFolder)
+        Me.Controls.Add(Me.btnProduzionePla)
         Me.Controls.Add(Me.btnProduzioneLamiera)
         Me.Controls.Add(Me.btnCancelOperation)
         Me.Controls.Add(Me.progressOperations)
@@ -476,6 +487,7 @@ Partial Class SET_MainForm
     Friend WithEvents progressOperations As ProgressBar
     Friend WithEvents btnCancelOperation As Button
     Friend WithEvents btnProduzioneLamiera As Button
+    Friend WithEvents btnProduzionePla As Button
     Friend WithEvents btnCleanFolder As Button
     Friend WithEvents chkAutoLayoutDft As CheckBox
 End Class
