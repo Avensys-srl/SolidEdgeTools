@@ -1090,6 +1090,7 @@ Public Class SET_MainForm
         Dim draftOptions = GetDraftGenerationOptions()
         Dim draftService As New DraftGenerationService(Sub(app, outputPath, modelLinkPath) DisegniDiPiega_ExportDFT(app, outputPath, modelLinkPath, draftOptions.Scale, draftOptions.AutoLayoutSheetMetalViews),
                                                        AddressOf DisplayException)
+        Dim assemblyDirectory = Path.GetDirectoryName(asmFilePath)
 
         Return ExecuteWithProgress(
             "Generazione DFT",
@@ -1098,7 +1099,10 @@ Public Class SET_MainForm
                     asmFilePath,
                     GetApplicationOptions(),
                     False,
-                    Function(app, assembly) draftService.GenerateForAssembly(app, assembly, draftOptions, progress, AddressOf IsCancellationRequested))
+                    Function(app, assembly)
+                        ArchiveExistingProductionFolder(Path.Combine(assemblyDirectory, "Disegni di Piega"))
+                        Return draftService.GenerateForAssembly(app, assembly, draftOptions, progress, AddressOf IsCancellationRequested)
+                    End Function)
             End Function)
 
     End Function
@@ -1222,21 +1226,28 @@ Public Class SET_MainForm
             End If
 
             objDraft.SaveAs(outputDFTFilePath)
-            objDraft.Close()
 
         Finally
             ReleaseCOMReference(objIsoView)
             ReleaseCOMReference(objRightView)
             ReleaseCOMReference(objTopView)
             ReleaseCOMReference(objFoldedView)
-            ReleaseCOMReference(objDocuments)
-            ReleaseCOMReference(objDraft)
-            ReleaseCOMReference(objSheet)
-            ReleaseCOMReference(objSheetSetup)
-            ReleaseCOMReference(objModelLinks)
-            ReleaseCOMReference(objModelLink)
-            ReleaseCOMReference(objDrawingViews)
             ReleaseCOMReference(objDrawingView)
+            ReleaseCOMReference(objDrawingViews)
+            ReleaseCOMReference(objModelLink)
+            ReleaseCOMReference(objModelLinks)
+            ReleaseCOMReference(objSheetSetup)
+            ReleaseCOMReference(objSheet)
+
+            Try
+                If objDraft IsNot Nothing Then
+                    objDraft.Close()
+                End If
+            Catch
+            End Try
+
+            ReleaseCOMReference(objDraft)
+            ReleaseCOMReference(objDocuments)
         End Try
     End Sub
 
@@ -1300,11 +1311,13 @@ Public Class SET_MainForm
             End If
 
             objDraft.Save()
-            objDraft.Close()
             Return True
         Catch
             Return False
         Finally
+            ReleaseCOMReference(objModelLink)
+            ReleaseCOMReference(objModelLinks)
+
             Try
                 If objDraft IsNot Nothing Then
                     objDraft.Close()
@@ -1319,8 +1332,6 @@ Public Class SET_MainForm
                 End Try
             End If
 
-            ReleaseCOMReference(objModelLink)
-            ReleaseCOMReference(objModelLinks)
             ReleaseCOMReference(objDraft)
             ReleaseCOMReference(objDocuments)
         End Try
@@ -1624,13 +1635,6 @@ Public Class SET_MainForm
         Catch
             Return Nothing
         Finally
-            Try
-                If tempDraft IsNot Nothing Then
-                    tempDraft.Close(False)
-                End If
-            Catch
-            End Try
-
             ReleaseCOMReference(tempIsoView)
             ReleaseCOMReference(tempRightView)
             ReleaseCOMReference(tempTopView)
@@ -1640,6 +1644,14 @@ Public Class SET_MainForm
             ReleaseCOMReference(tempModelLinks)
             ReleaseCOMReference(tempSheetSetup)
             ReleaseCOMReference(tempSheet)
+
+            Try
+                If tempDraft IsNot Nothing Then
+                    tempDraft.Close(False)
+                End If
+            Catch
+            End Try
+
             ReleaseCOMReference(tempDraft)
         End Try
     End Function
